@@ -5,7 +5,7 @@
 
     <!-- Login -->
     <string name="login_title">Iniciar Sesión</string>
-    <string name="login_subtitle">Tu asistente personal de medicamentos</string>
+    <string name="login_subtitle">Controla tus medicamentos de forma sencilla</string>
     <string name="login_toggle_login">Iniciar Sesión</string>
     <string name="login_toggle_register">Registrarse</string>
     <string name="login_email_hint">Correo electrónico</string>

@@ -10,8 +10,7 @@ public class Usuario {
     private String telefono;
     private int edad;
     private List<String> medicamentosIds;
-    private String role; // "paciente" o "asistente"
-    private String pacienteId; // Para asistentes: ID del paciente que atienden
+    private String role; // "paciente"
 
     // Constructor
     public Usuario() {
@@ -104,20 +103,8 @@ public class Usuario {
         this.role = role;
     }
 
-    public String getPacienteId() {
-        return pacienteId;
-    }
-
-    public void setPacienteId(String pacienteId) {
-        this.pacienteId = pacienteId;
-    }
-
     // Métodos útiles para roles
     public boolean esPaciente() {
         return "paciente".equals(role);
-    }
-
-    public boolean esAsistente() {
-        return "asistente".equals(role);
     }
 }

@@ -54,7 +54,7 @@ public class AjustesActivity extends AppCompatActivity {
         authService = new com.controlmedicamentos.myapplication.services.AuthService();
         firebaseService = new com.controlmedicamentos.myapplication.services.FirebaseService();
         googleCalendarAuthService = new com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService(this);
-        
+
         inicializarVistas();
         cargarDatosUsuario(); // Cargar desde Firebase
         cargarPreferencias(); // Cargar configuraciones locales
@@ -272,7 +272,7 @@ public class AjustesActivity extends AppCompatActivity {
                 finish();
             }
         });
-        
+
         btnNavAjustes.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -293,7 +293,7 @@ public class AjustesActivity extends AppCompatActivity {
                 mostrarDialogoEliminarCuenta();
             }
         });
-        
+
         // Google Calendar listeners
         btnConectarGoogleCalendar.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -375,14 +375,14 @@ public class AjustesActivity extends AppCompatActivity {
             public void onSuccess(Object result) {
                 // Guardar configuraciones locales en SharedPreferences
                 SharedPreferences.Editor editor = preferences.edit();
-                editor.putBoolean("notificaciones", switchNotificaciones.isChecked());
-                editor.putBoolean("vibracion", switchVibracion.isChecked());
-                editor.putBoolean("sonido", switchSonido.isChecked());
-                editor.putInt("volumen", seekBarVolumen.getProgress());
-                editor.putInt("repeticiones", seekBarRepeticiones.getProgress());
-                editor.putInt("dias_antelacion_stock", diasAntelacionStock);
-                editor.apply();
-                
+        editor.putBoolean("notificaciones", switchNotificaciones.isChecked());
+        editor.putBoolean("vibracion", switchVibracion.isChecked());
+        editor.putBoolean("sonido", switchSonido.isChecked());
+        editor.putInt("volumen", seekBarVolumen.getProgress());
+        editor.putInt("repeticiones", seekBarRepeticiones.getProgress());
+        editor.putInt("dias_antelacion_stock", diasAntelacionStock);
+        editor.apply();
+
                 Toast.makeText(AjustesActivity.this, "Configuración guardada exitosamente", Toast.LENGTH_SHORT).show();
             }
 
@@ -462,7 +462,6 @@ public class AjustesActivity extends AppCompatActivity {
                 .setMessage("⚠️ Esta acción es permanente y no se puede deshacer. Se eliminarán:\n\n" +
                         "• Tu cuenta de usuario\n" +
                         "• Todos tus medicamentos\n" +
-                        "• Todos tus asistentes\n" +
                         "• Todos tus registros e historial")
                 .setView(dialogView)
                 .setPositiveButton("Eliminar Cuenta", new DialogInterface.OnClickListener() {
@@ -503,10 +502,9 @@ public class AjustesActivity extends AppCompatActivity {
         // TODO: Implementar eliminación completa de cuenta
         // 1. Reautenticar usuario
         // 2. Eliminar todos los medicamentos
-        // 3. Eliminar todos los asistentes
-        // 4. Eliminar documento de usuario en Firestore
-        // 5. Eliminar usuario de Firebase Auth
-        // 6. Redirigir a LoginActivity
+        // 3. Eliminar documento de usuario en Firestore
+        // 4. Eliminar usuario de Firebase Auth
+        // 5. Redirigir a LoginActivity
     }
     
     /**

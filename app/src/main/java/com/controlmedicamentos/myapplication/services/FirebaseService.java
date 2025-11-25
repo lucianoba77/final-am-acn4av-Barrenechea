@@ -41,7 +41,6 @@ public class FirebaseService {
     private static final String COLLECTION_MEDICAMENTOS = "medicamentos";
     private static final String COLLECTION_TOMAS = "tomas";
     private static final String COLLECTION_CONFIGURACIONES = "configuraciones";
-    private static final String COLLECTION_ASISTENTES = "asistentes";
 
     public FirebaseService() {
         db = FirebaseFirestore.getInstance();
@@ -604,9 +603,6 @@ public class FirebaseService {
         if (usuario.getRole() != null) {
             map.put("role", usuario.getRole());
         }
-        if (usuario.getPacienteId() != null) {
-            map.put("pacienteId", usuario.getPacienteId());
-        }
         return map;
     }
 
@@ -624,9 +620,6 @@ public class FirebaseService {
         }
         if (document.getString("role") != null) {
             usuario.setRole(document.getString("role"));
-        }
-        if (document.getString("pacienteId") != null) {
-            usuario.setPacienteId(document.getString("pacienteId"));
         }
         return usuario;
     }
@@ -898,191 +891,6 @@ public class FirebaseService {
         return map;
     }
 
-    // ==================== ASISTENTES ====================
-
-    /**
-     * Agrega un asistente a un paciente
-     * Consistente con React: asistentesService.js - agregarAsistente()
-     * 
-     * @param emailAsistente Email del asistente
-     * @param nombreAsistente Nombre del asistente
-     * @param password Contraseña del asistente
-     * @param callback Callback para manejar el resultado
-     */
-    public void agregarAsistente(String emailAsistente, String nombreAsistente, String password, FirestoreCallback callback) {
-        FirebaseUser firebaseUser = authService.getCurrentUser();
-        if (firebaseUser == null) {
-            if (callback != null) {
-                callback.onError(new Exception("Usuario no autenticado"));
-            }
-            return;
-        }
-
-        String pacienteId = firebaseUser.getUid();
-        String emailPaciente = firebaseUser.getEmail();
-
-        // Verificar que el asistente no esté ya agregado
-        db.collection(COLLECTION_ASISTENTES)
-            .whereEqualTo("pacienteId", pacienteId)
-            .whereEqualTo("emailAsistente", emailAsistente)
-            .get()
-            .addOnCompleteListener(task -> {
-                if (task.isSuccessful() && !task.getResult().isEmpty()) {
-                    if (callback != null) {
-                        callback.onError(new Exception("Este asistente ya está agregado"));
-                    }
-                    return;
-                }
-
-                // Crear el documento en Firestore primero
-                Map<String, Object> asistenteData = new HashMap<>();
-                asistenteData.put("pacienteId", pacienteId);
-                asistenteData.put("emailAsistente", emailAsistente);
-                asistenteData.put("nombreAsistente", nombreAsistente);
-                SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-                isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                asistenteData.put("fechaAgregado", isoFormat.format(new Date()));
-                asistenteData.put("activo", true);
-
-                // Guardar documento de asistente
-                db.collection(COLLECTION_ASISTENTES)
-                    .add(asistenteData)
-                    .addOnSuccessListener(documentReference -> {
-                        // Ahora crear el usuario del asistente en Firebase Auth
-                        authService.registerUser(emailAsistente, password, new AuthService.AuthCallback() {
-                            @Override
-                            public void onSuccess(com.google.firebase.auth.FirebaseUser asistenteUser) {
-                                // Crear el documento del asistente en Firestore con rol correcto
-                                Map<String, Object> usuarioAsistenteData = new HashMap<>();
-                                usuarioAsistenteData.put("id", asistenteUser.getUid());
-                                usuarioAsistenteData.put("email", asistenteUser.getEmail());
-                                usuarioAsistenteData.put("nombre", nombreAsistente);
-                                usuarioAsistenteData.put("role", "asistente");
-                                usuarioAsistenteData.put("pacienteId", pacienteId);
-                                usuarioAsistenteData.put("tipoSuscripcion", "gratis");
-                                usuarioAsistenteData.put("esPremium", false);
-                                usuarioAsistenteData.put("fechaCreacion", isoFormat.format(new Date()));
-                                usuarioAsistenteData.put("ultimaSesion", isoFormat.format(new Date()));
-
-                                db.collection(COLLECTION_USUARIOS)
-                                    .document(asistenteUser.getUid())
-                                    .set(usuarioAsistenteData)
-                                    .addOnSuccessListener(aVoid -> {
-                                        // Cerrar sesión del asistente
-                                        // Nota: En Android no podemos restaurar automáticamente la sesión del paciente
-                                        // porque no tenemos acceso a su contraseña (por seguridad)
-                                        // El usuario necesitará volver a iniciar sesión manualmente
-                                        authService.logout();
-                                        
-                                        Log.d(TAG, "Asistente creado exitosamente. Usuario necesita volver a iniciar sesión.");
-                                        if (callback != null) {
-                                            // Retornar éxito pero indicar que requiere re-login
-                                            callback.onSuccess("REQUIERE_RELOGIN:" + documentReference.getId());
-                                        }
-                                    })
-                                    .addOnFailureListener(e -> {
-                                        Log.e(TAG, "Error al crear documento de usuario del asistente", e);
-                                        // Eliminar el documento de asistente creado
-                                        documentReference.delete();
-                                        if (callback != null) {
-                                            callback.onError(new Exception("Error al crear usuario del asistente: " + e.getMessage()));
-                                        }
-                                    });
-                            }
-
-                            @Override
-                            public void onError(Exception exception) {
-                                Log.e(TAG, "Error al crear usuario del asistente en Firebase Auth", exception);
-                                // Eliminar el documento de asistente creado
-                                documentReference.delete();
-                                
-                                String mensajeError = "Error al crear la cuenta del asistente";
-                                if (exception.getMessage() != null) {
-                                    if (exception.getMessage().contains("email-already-in-use")) {
-                                        mensajeError = "Este email ya está registrado. El asistente debe usar otro email o iniciar sesión con este.";
-                                    } else if (exception.getMessage().contains("invalid-email")) {
-                                        mensajeError = "El email no es válido";
-                                    } else if (exception.getMessage().contains("weak-password")) {
-                                        mensajeError = "La contraseña es muy débil (mínimo 6 caracteres)";
-                                    }
-                                }
-                                
-                                if (callback != null) {
-                                    callback.onError(new Exception(mensajeError));
-                                }
-                            }
-                        });
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Error al crear documento de asistente", e);
-                        if (callback != null) {
-                            callback.onError(new Exception("Error al agregar asistente: " + e.getMessage()));
-                        }
-                    });
-            });
-    }
-
-    /**
-     * Obtiene todos los asistentes de un paciente
-     * Consistente con React: asistentesService.js - obtenerAsistentes()
-     */
-    public void obtenerAsistentes(FirestoreListCallback callback) {
-        FirebaseUser firebaseUser = authService.getCurrentUser();
-        if (firebaseUser == null) {
-            if (callback != null) {
-                callback.onError(new Exception("Usuario no autenticado"));
-            }
-            return;
-        }
-
-        String pacienteId = firebaseUser.getUid();
-
-        db.collection(COLLECTION_ASISTENTES)
-            .whereEqualTo("pacienteId", pacienteId)
-            .whereEqualTo("activo", true)
-            .get()
-            .addOnCompleteListener(task -> {
-                if (task.isSuccessful()) {
-                    List<Map<String, Object>> asistentes = new ArrayList<>();
-                    for (DocumentSnapshot document : task.getResult()) {
-                        Map<String, Object> asistente = new HashMap<>();
-                        asistente.put("id", document.getId());
-                        asistente.putAll(document.getData());
-                        asistentes.add(asistente);
-                    }
-                    if (callback != null) {
-                        callback.onSuccess(asistentes);
-                    }
-                } else {
-                    Log.e(TAG, "Error al obtener asistentes", task.getException());
-                    if (callback != null) {
-                        callback.onError(task.getException());
-                    }
-                }
-            });
-    }
-
-    /**
-     * Elimina un asistente
-     * Consistente con React: asistentesService.js - eliminarAsistente()
-     */
-    public void eliminarAsistente(String asistenteId, FirestoreCallback callback) {
-        db.collection(COLLECTION_ASISTENTES)
-            .document(asistenteId)
-            .delete()
-            .addOnSuccessListener(aVoid -> {
-                Log.d(TAG, "Asistente eliminado exitosamente");
-                if (callback != null) {
-                    callback.onSuccess(null);
-                }
-            })
-            .addOnFailureListener(e -> {
-                Log.e(TAG, "Error al eliminar asistente", e);
-                if (callback != null) {
-                    callback.onError(e);
-                }
-            });
-    }
 
     // ==================== INTERFACES ====================
 
