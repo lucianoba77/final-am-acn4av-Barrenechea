@@ -4,21 +4,20 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.functions.FirebaseFunctions;
+import com.google.firebase.functions.HttpsCallableResult;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import org.json.JSONObject;
 
 /**
  * Servicio para manejar la autenticación OAuth con Google Calendar
@@ -30,11 +29,13 @@ public class GoogleCalendarAuthService {
     
     private Context context;
     private FirebaseFirestore db;
+    private FirebaseFunctions functions;
     private AuthService authService;
     
     public GoogleCalendarAuthService(Context context) {
         this.context = context;
         this.db = FirebaseFirestore.getInstance();
+        this.functions = FirebaseFunctions.getInstance();
         this.authService = new AuthService();
     }
     
@@ -169,98 +170,88 @@ public class GoogleCalendarAuthService {
     }
     
     /**
-     * Intercambia un serverAuthCode por un access_token
+     * Intercambia un serverAuthCode por un access_token usando Firebase Functions
+     * El Client Secret está seguro en el backend
      * @param serverAuthCode El código de autorización obtenido de Google Sign-In
-     * @param clientId El Client ID de Google OAuth
-     * @param clientSecret El Client Secret de Google OAuth (opcional, puede ser null)
      * @param callback Callback para manejar el resultado
      */
-    public void intercambiarAuthCodePorToken(String serverAuthCode, String clientId, String clientSecret, FirestoreCallback callback) {
-        new Thread(() -> {
-            try {
-                // Construir la URL y los parámetros
-                URL url = new URL("https://oauth2.googleapis.com/token");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                conn.setDoOutput(true);
-                
-                // Construir el cuerpo de la petición
-                String redirectUri = "com.controlmedicamentos.myapplication://googlecalendar";
-                String postData = "code=" + java.net.URLEncoder.encode(serverAuthCode, "UTF-8") +
-                    "&client_id=" + java.net.URLEncoder.encode(clientId, "UTF-8") +
-                    "&redirect_uri=" + java.net.URLEncoder.encode(redirectUri, "UTF-8") +
-                    "&grant_type=authorization_code";
-                
-                // Si hay client_secret, agregarlo (aunque no es lo más seguro, es necesario para el intercambio)
-                if (clientSecret != null && !clientSecret.isEmpty()) {
-                    postData += "&client_secret=" + java.net.URLEncoder.encode(clientSecret, "UTF-8");
-                }
-                
-                // Enviar la petición
-                OutputStream os = conn.getOutputStream();
-                os.write(postData.getBytes("UTF-8"));
-                os.flush();
-                os.close();
-                
-                // Leer la respuesta
-                int responseCode = conn.getResponseCode();
-                BufferedReader in = new BufferedReader(new InputStreamReader(
-                    responseCode == 200 ? conn.getInputStream() : conn.getErrorStream()));
-                StringBuilder response = new StringBuilder();
-                String inputLine;
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
-                }
-                in.close();
-                
-                if (responseCode == 200) {
-                    // Parsear la respuesta JSON
-                    JSONObject jsonResponse = new JSONObject(response.toString());
-                    String accessToken = jsonResponse.getString("access_token");
-                    String tokenType = jsonResponse.optString("token_type", "Bearer");
-                    int expiresIn = jsonResponse.optInt("expires_in", 3600);
-                    String refreshToken = jsonResponse.optString("refresh_token", null);
-                    
-                    // Preparar los datos del token para guardar
-                    Map<String, Object> tokenData = new HashMap<>();
-                    tokenData.put("access_token", accessToken);
-                    tokenData.put("token_type", tokenType);
-                    tokenData.put("expires_in", expiresIn);
-                    if (refreshToken != null && !refreshToken.isEmpty()) {
-                        tokenData.put("refresh_token", refreshToken);
-                    }
-                    
-                    // Calcular fechas
-                    SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-                    isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                    Date ahora = new Date();
-                    tokenData.put("fechaObtencion", isoFormat.format(ahora));
-                    Date fechaExpiracion = new Date(ahora.getTime() + (expiresIn * 1000L));
-                    tokenData.put("fechaExpiracion", isoFormat.format(fechaExpiracion));
-                    
-                    Log.d(TAG, "Token intercambiado exitosamente");
-                    if (callback != null) {
-                        callback.onSuccess(tokenData);
-                    }
-                } else {
-                    String errorMsg = "Error al intercambiar código por token: " + responseCode + " - " + response.toString();
-                    Log.e(TAG, errorMsg);
-                    if (callback != null) {
-                        callback.onError(new Exception(errorMsg));
+    public void intercambiarAuthCodePorToken(String serverAuthCode, FirestoreCallback callback) {
+        Log.d(TAG, "Intercambiando authCode por token usando Firebase Functions...");
+        
+        // Preparar los datos para la función callable
+        Map<String, Object> data = new HashMap<>();
+        data.put("authCode", serverAuthCode);
+        
+        // Llamar a la función callable de Firebase
+        functions.getHttpsCallable("intercambiarGoogleCalendarToken")
+            .call(data)
+            .addOnCompleteListener(new OnCompleteListener<HttpsCallableResult>() {
+                @Override
+                public void onComplete(@NonNull Task<HttpsCallableResult> task) {
+                    if (task.isSuccessful()) {
+                        HttpsCallableResult result = task.getResult();
+                        if (result != null && result.getData() != null) {
+                            try {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> resultData = (Map<String, Object>) result.getData();
+                                
+                                // La función ya guardó el token en Firestore, pero necesitamos obtenerlo
+                                // para retornarlo al callback
+                                Log.d(TAG, "Token intercambiado exitosamente por Firebase Functions");
+                                
+                                // Obtener el token recién guardado de Firestore
+                                FirebaseUser firebaseUser = authService.getCurrentUser();
+                                if (firebaseUser != null) {
+                                    String userId = firebaseUser.getUid();
+                                    db.collection(COLLECTION_GOOGLE_TOKENS)
+                                        .document(userId)
+                                        .get()
+                                        .addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+                                            @Override
+                                            public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+                                                if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
+                                                    Map<String, Object> tokenData = task.getResult().getData();
+                                                    if (callback != null) {
+                                                        callback.onSuccess(tokenData);
+                                                    }
+                                                } else {
+                                                    // Si no se puede obtener de Firestore, usar los datos de la respuesta
+                                                    if (callback != null) {
+                                                        callback.onSuccess(resultData);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                } else {
+                                    if (callback != null) {
+                                        callback.onError(new Exception("Usuario no autenticado"));
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error al procesar respuesta de Firebase Functions", e);
+                                if (callback != null) {
+                                    callback.onError(e);
+                                }
+                            }
+                        } else {
+                            Log.e(TAG, "Respuesta de Firebase Functions vacía o null");
+                            if (callback != null) {
+                                callback.onError(new Exception("Respuesta vacía de Firebase Functions"));
+                            }
+                        }
+                    } else {
+                        Exception exception = task.getException();
+                        Log.e(TAG, "Error al llamar a Firebase Functions", exception);
+                        if (callback != null) {
+                            callback.onError(exception != null ? exception : new Exception("Error desconocido en Firebase Functions"));
+                        }
                     }
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Error al intercambiar auth code por token", e);
-                if (callback != null) {
-                    callback.onError(e);
-                }
-            }
-        }).start();
+            });
     }
     
     /**
-     * Renueva el token de acceso usando refresh_token
+     * Renueva el token de acceso usando refresh_token mediante Firebase Functions
      */
     private void renovarTokenGoogle(Map<String, Object> tokenDataAntiguo, FirestoreCallback callback) {
         Object refreshTokenObj = tokenDataAntiguo != null ? tokenDataAntiguo.get("refresh_token") : null;
@@ -273,12 +264,78 @@ public class GoogleCalendarAuthService {
         }
         
         String refreshToken = refreshTokenObj.toString();
-        // TODO: Implementar renovación usando refresh_token si es necesario
-        // Por ahora, retornar null para indicar que necesita reconectar
-        Log.d(TAG, "Renovación de token no implementada aún. El usuario necesitará reconectar.");
-        if (callback != null) {
-            callback.onSuccess(null);
-        }
+        Log.d(TAG, "Renovando token usando Firebase Functions...");
+        
+        // Preparar los datos para la función callable
+        Map<String, Object> data = new HashMap<>();
+        data.put("refreshToken", refreshToken);
+        
+        // Llamar a la función callable de Firebase
+        functions.getHttpsCallable("refrescarGoogleCalendarToken")
+            .call(data)
+            .addOnCompleteListener(new OnCompleteListener<HttpsCallableResult>() {
+                @Override
+                public void onComplete(@NonNull Task<HttpsCallableResult> task) {
+                    if (task.isSuccessful()) {
+                        HttpsCallableResult result = task.getResult();
+                        if (result != null && result.getData() != null) {
+                            try {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> resultData = (Map<String, Object>) result.getData();
+                                
+                                // La función ya guardó el token actualizado en Firestore
+                                Log.d(TAG, "Token renovado exitosamente por Firebase Functions");
+                                
+                                // Obtener el token actualizado de Firestore
+                                FirebaseUser firebaseUser = authService.getCurrentUser();
+                                if (firebaseUser != null) {
+                                    String userId = firebaseUser.getUid();
+                                    db.collection(COLLECTION_GOOGLE_TOKENS)
+                                        .document(userId)
+                                        .get()
+                                        .addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+                                            @Override
+                                            public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+                                                if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
+                                                    Map<String, Object> tokenData = task.getResult().getData();
+                                                    if (callback != null) {
+                                                        callback.onSuccess(tokenData);
+                                                    }
+                                                } else {
+                                                    // Si no se puede obtener de Firestore, usar los datos de la respuesta
+                                                    if (callback != null) {
+                                                        callback.onSuccess(resultData);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                } else {
+                                    if (callback != null) {
+                                        callback.onError(new Exception("Usuario no autenticado"));
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error al procesar respuesta de renovación", e);
+                                if (callback != null) {
+                                    callback.onError(e);
+                                }
+                            }
+                        } else {
+                            Log.e(TAG, "Respuesta de renovación vacía o null");
+                            if (callback != null) {
+                                callback.onSuccess(null); // No se pudo renovar, pero no es crítico
+                            }
+                        }
+                    } else {
+                        Exception exception = task.getException();
+                        Log.e(TAG, "Error al renovar token con Firebase Functions", exception);
+                        if (callback != null) {
+                            // No es crítico, retornar null para que el código que llama pueda manejar
+                            callback.onSuccess(null);
+                        }
+                    }
+                }
+            });
     }
     
     /**

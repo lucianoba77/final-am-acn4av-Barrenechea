@@ -51,6 +51,8 @@ dependencies {
     implementation libs.firebase.auth
     implementation libs.firebase.firestore
     implementation libs.firebase.messaging
+    // Firebase Functions (no está en el BOM, usar versión compatible)
+    implementation 'com.google.firebase:firebase-functions:21.0.0'
     
     // Google Sign-In
     implementation 'com.google.android.gms:play-services-auth:21.0.0'

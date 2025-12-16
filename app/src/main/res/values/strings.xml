@@ -22,6 +22,7 @@
     <string name="or_divider">O</string>
     <!-- Google OAuth Web Client ID - Obtenido de google-services.json -->
     <string name="default_web_client_id">938306231220-eglguura8gmu64thg88pf5r4cbc59oj3.apps.googleusercontent.com</string>
+    <!-- Nota: El Client Secret ahora está seguro en Firebase Functions (backend) -->
 
     <!-- Main Activity -->
     <string name="main_greeting">¡Hola, %s!</string>

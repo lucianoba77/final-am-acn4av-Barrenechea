@@ -877,67 +877,26 @@ public class AjustesActivity extends AppCompatActivity {
     }
     
     /**
-     * Intercambia el serverAuthCode por un access_token
+     * Intercambia el serverAuthCode por un access_token usando Firebase Functions
+     * El Client Secret está seguro en el backend
      */
     private void intercambiarAuthCodePorToken(String serverAuthCode) {
-        // Bug 2 Fix: Validar que clientId no sea null antes de usarlo
-        String clientId = getString(R.string.default_web_client_id);
-        if (clientId == null || clientId.isEmpty()) {
-            Logger.e("AjustesActivity", "Client ID no configurado o es null");
-            Toast.makeText(this, 
-                "Error: Client ID no configurado. Verifica la configuración de la app.",
-                Toast.LENGTH_LONG).show();
-            return;
-        }
+        Logger.d("AjustesActivity", "Intercambiando serverAuthCode por access_token usando Firebase Functions...");
         
-        // Intentar obtener client_secret (puede no estar configurado)
-        String clientSecret = null;
-        try {
-            int clientSecretResId = getResources().getIdentifier("google_oauth_client_secret", "string", getPackageName());
-            if (clientSecretResId != 0) {
-                clientSecret = getString(clientSecretResId);
-            }
-        } catch (Exception e) {
-            Logger.d("AjustesActivity", "Client secret no configurado (opcional)");
-        }
-        
-        Logger.d("AjustesActivity", "Intercambiando serverAuthCode por access_token...");
-        
-        // Intercambiar el código por el token
-        googleCalendarAuthService.intercambiarAuthCodePorToken(serverAuthCode, clientId, clientSecret,
+        // Intercambiar el código por el token (Firebase Functions ya guarda el token en Firestore)
+        googleCalendarAuthService.intercambiarAuthCodePorToken(serverAuthCode,
             new com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService.FirestoreCallback() {
                 @Override
                 public void onSuccess(Object result) {
                     if (result != null && result instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> tokenData = (Map<String, Object>) result;
-                        
-                        // Guardar el token en Firestore
-                        googleCalendarAuthService.guardarTokenGoogle(tokenData, 
-                            new com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService.FirestoreCallback() {
-                                @Override
-                                public void onSuccess(Object saveResult) {
-                                    Logger.d("AjustesActivity", "Token guardado exitosamente");
-                                    runOnUiThread(() -> {
-                                        googleCalendarConectado = true;
-                                        actualizarUIGoogleCalendar();
-                                        Toast.makeText(AjustesActivity.this, 
-                                            "Google Calendar conectado exitosamente", 
-                                            Toast.LENGTH_SHORT).show();
-                                    });
-                                }
-                                
-                                @Override
-                                public void onError(Exception exception) {
-                                    Logger.e("AjustesActivity", "Error al guardar token", exception);
-                                    runOnUiThread(() -> {
-                                        Toast.makeText(AjustesActivity.this, 
-                                            "Error al guardar el token: " + 
-                                            (exception != null ? exception.getMessage() : "Error desconocido"), 
-                                            Toast.LENGTH_LONG).show();
-                                    });
-                                }
-                            });
+                        Logger.d("AjustesActivity", "Token intercambiado y guardado exitosamente por Firebase Functions");
+                        runOnUiThread(() -> {
+                            googleCalendarConectado = true;
+                            actualizarUIGoogleCalendar();
+                            Toast.makeText(AjustesActivity.this, 
+                                "Google Calendar conectado exitosamente", 
+                                Toast.LENGTH_SHORT).show();
+                        });
                     } else {
                         Logger.e("AjustesActivity", "No se obtuvo token del intercambio");
                         runOnUiThread(() -> {
@@ -954,15 +913,17 @@ public class AjustesActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         String mensaje = "Error al conectar con Google Calendar: ";
                         if (exception != null && exception.getMessage() != null) {
-                            if (exception.getMessage().contains("invalid_grant")) {
+                            if (exception.getMessage().contains("unauthenticated")) {
+                                mensaje += "Debes estar autenticado. Cierra sesión y vuelve a iniciar sesión.";
+                            } else if (exception.getMessage().contains("failed-precondition")) {
+                                mensaje += "Firebase Functions no está configurado correctamente. Contacta al administrador.";
+                            } else if (exception.getMessage().contains("invalid_grant")) {
                                 mensaje += "El código de autorización ha expirado o ya fue usado. Intenta nuevamente.";
-                            } else if (exception.getMessage().contains("invalid_client")) {
-                                mensaje += "Client ID o Client Secret incorrectos. Verifica la configuración.";
                             } else {
                                 mensaje += exception.getMessage();
                             }
                         } else {
-                            mensaje += "Error desconocido";
+                            mensaje += "Error desconocido. Verifica que Firebase Functions esté desplegado.";
                         }
                         Toast.makeText(AjustesActivity.this, mensaje, Toast.LENGTH_LONG).show();
                     });

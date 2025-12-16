@@ -52,10 +52,13 @@ exports.intercambiarGoogleCalendarToken = functions.https.onCall(async (data, co
     }
 
     // Intercambiar auth_code por tokens usando Google OAuth2
+    // Para requestServerAuthCode en Android, el redirect_uri debe coincidir con uno de los URIs autorizados
+    // Usamos el URI HTTPS configurado en Google Cloud Console
+    const redirectUri = 'https://mimedicinaapp.firebaseapp.com/googlecalendar/callback';
     const oauth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      'postmessage' // Para mobile apps
+      redirectUri
     );
 
     const { tokens } = await oauth2Client.getToken(authCode);
@@ -143,10 +146,12 @@ exports.refrescarGoogleCalendarToken = functions.https.onCall(async (data, conte
     }
 
     // Renovar token usando Google OAuth2
+    // Para renovación, usamos el mismo redirect_uri que en el intercambio inicial
+    const redirectUri = 'https://mimedicinaapp.firebaseapp.com/googlecalendar/callback';
     const oauth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      'postmessage'
+      redirectUri
     );
 
     oauth2Client.setCredentials({
