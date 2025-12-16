@@ -209,83 +209,105 @@ public class GoogleCalendarAuthService {
             return;
         }
         
-        // Realizar petición para renovar el token
-        new Thread(() -> {
-            try {
-                String url = "https://oauth2.googleapis.com/token";
-                String postData = "client_id=" + java.net.URLEncoder.encode(clientId, "UTF-8") +
-                                 "&client_secret=" + java.net.URLEncoder.encode(clientSecret, "UTF-8") +
-                                 "&refresh_token=" + java.net.URLEncoder.encode(refreshToken, "UTF-8") +
-                                 "&grant_type=refresh_token";
-                
-                java.net.URL urlObj = new java.net.URL(url);
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) urlObj.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                conn.setDoOutput(true);
-                
-                java.io.OutputStream os = conn.getOutputStream();
-                os.write(postData.getBytes("UTF-8"));
-                os.flush();
-                os.close();
-                
-                int responseCode = conn.getResponseCode();
-                if (responseCode == 200) {
-                    java.io.BufferedReader reader = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(conn.getInputStream()));
-                    StringBuilder response = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        response.append(line);
-                    }
-                    reader.close();
-                    
-                    // Parsear respuesta JSON
-                    org.json.JSONObject jsonResponse = new org.json.JSONObject(response.toString());
-                    String newAccessToken = jsonResponse.getString("access_token");
-                    long expiresIn = jsonResponse.optLong("expires_in", 3600);
-                    
-                    // Crear nuevo token data
-                    Map<String, Object> nuevoTokenData = new HashMap<>(tokenDataAntiguo);
-                    nuevoTokenData.put("access_token", newAccessToken);
-                    nuevoTokenData.put("expires_in", expiresIn);
-                    
-                    // Actualizar fecha de obtención
-                    SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-                    isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                    nuevoTokenData.put("fechaObtencion", isoFormat.format(new Date()));
-                    
-                    // Guardar el nuevo token
-                    guardarTokenGoogle(nuevoTokenData, new FirestoreCallback() {
-                        @Override
-                        public void onSuccess(Object result) {
-                            Log.d(TAG, "Token renovado y guardado exitosamente");
-                            if (callback != null) {
-                                callback.onSuccess(nuevoTokenData);
-                            }
-                        }
-                        
-                        @Override
-                        public void onError(Exception exception) {
-                            Log.e(TAG, "Error al guardar token renovado", exception);
-                            if (callback != null) {
-                                callback.onError(exception);
-                            }
-                        }
-                    });
-                } else {
-                    Log.e(TAG, "Error al renovar token: " + responseCode);
-                    if (callback != null) {
-                        callback.onError(new Exception("Error al renovar token: " + responseCode));
-                    }
-                }
-            } catch (Exception e) {
+        // Realizar petición para renovar el token usando OkHttpClient (ya usado en GoogleCalendarService)
+        // Esto evita crear threads manuales y maneja mejor el ciclo de vida
+        okhttp3.OkHttpClient httpClient = new okhttp3.OkHttpClient();
+        
+        okhttp3.MediaType mediaType = okhttp3.MediaType.parse("application/x-www-form-urlencoded; charset=utf-8");
+        String postData;
+        try {
+            postData = "client_id=" + java.net.URLEncoder.encode(clientId, "UTF-8") +
+                       "&client_secret=" + java.net.URLEncoder.encode(clientSecret, "UTF-8") +
+                       "&refresh_token=" + java.net.URLEncoder.encode(refreshToken, "UTF-8") +
+                       "&grant_type=refresh_token";
+        } catch (java.io.UnsupportedEncodingException e) {
+            Log.e(TAG, "Error al codificar datos para renovar token", e);
+            if (callback != null) {
+                callback.onError(new Exception("Error al preparar petición de renovación de token", e));
+            }
+            return;
+        }
+        
+        okhttp3.RequestBody body = okhttp3.RequestBody.create(mediaType, postData);
+        okhttp3.Request request = new okhttp3.Request.Builder()
+            .url("https://oauth2.googleapis.com/token")
+            .post(body)
+            .build();
+        
+        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, java.io.IOException e) {
                 Log.e(TAG, "Error al renovar token de Google Calendar", e);
                 if (callback != null) {
                     callback.onError(e);
                 }
             }
-        }).start();
+            
+            @Override
+            public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
+                try {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String responseBody = response.body().string();
+                        
+                        // Parsear respuesta JSON
+                        org.json.JSONObject jsonResponse = new org.json.JSONObject(responseBody);
+                        String newAccessToken = jsonResponse.getString("access_token");
+                        long expiresIn = jsonResponse.optLong("expires_in", 3600);
+                        
+                        // Crear nuevo token data
+                        Map<String, Object> nuevoTokenData = new HashMap<>(tokenDataAntiguo);
+                        nuevoTokenData.put("access_token", newAccessToken);
+                        nuevoTokenData.put("expires_in", expiresIn);
+                        
+                        // Actualizar fecha de obtención
+                        SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+                        isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                        nuevoTokenData.put("fechaObtencion", isoFormat.format(new Date()));
+                        
+                        // Guardar el nuevo token
+                        guardarTokenGoogle(nuevoTokenData, new FirestoreCallback() {
+                            @Override
+                            public void onSuccess(Object result) {
+                                Log.d(TAG, "Token renovado y guardado exitosamente");
+                                if (callback != null) {
+                                    callback.onSuccess(nuevoTokenData);
+                                }
+                            }
+                            
+                            @Override
+                            public void onError(Exception exception) {
+                                Log.e(TAG, "Error al guardar token renovado", exception);
+                                if (callback != null) {
+                                    callback.onError(exception);
+                                }
+                            }
+                        });
+                    } else {
+                        String errorMessage = "Error al renovar token: " + response.code();
+                        if (response.body() != null) {
+                            try {
+                                errorMessage += " - " + response.body().string();
+                            } catch (Exception e) {
+                                // Ignorar error al leer body
+                            }
+                        }
+                        Log.e(TAG, errorMessage);
+                        if (callback != null) {
+                            callback.onError(new Exception(errorMessage));
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error al procesar respuesta de renovación de token", e);
+                    if (callback != null) {
+                        callback.onError(e);
+                    }
+                } finally {
+                    if (response != null && response.body() != null) {
+                        response.body().close();
+                    }
+                }
+            }
+        });
     }
     
     /**

@@ -22,7 +22,7 @@ public class MedicamentoDataManager {
     private final TomaTrackingService tomaTrackingService;
     private final Context context;
     private ListenerRegistration medicamentosListener;
-    private boolean listenerYaActualizo = false;
+    private volatile boolean listenerYaActualizo = false; // volatile para evitar race conditions
 
     /**
      * Callback para notificar cambios en los datos.
@@ -50,10 +50,20 @@ public class MedicamentoDataManager {
      * @param context El contexto de la aplicación.
      * @param firebaseService El servicio de Firebase.
      * @param tomaTrackingService El servicio de tracking de tomas.
+     * @throws IllegalArgumentException si algún parámetro es null
      */
     public MedicamentoDataManager(Context context, 
                                   FirebaseService firebaseService,
                                   TomaTrackingService tomaTrackingService) {
+        if (context == null) {
+            throw new IllegalArgumentException("Context no puede ser null");
+        }
+        if (firebaseService == null) {
+            throw new IllegalArgumentException("FirebaseService no puede ser null");
+        }
+        if (tomaTrackingService == null) {
+            throw new IllegalArgumentException("TomaTrackingService no puede ser null");
+        }
         this.context = context;
         this.firebaseService = firebaseService;
         this.tomaTrackingService = tomaTrackingService;

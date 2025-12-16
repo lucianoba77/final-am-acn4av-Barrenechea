@@ -295,13 +295,33 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
     }
     
     private String obtenerHorarioTomaEnAlerta(Medicamento medicamento) {
+        if (medicamento == null || medicamento.getId() == null) {
+            Logger.w(TAG, "obtenerHorarioTomaEnAlerta: medicamento o ID es null");
+            return null;
+        }
+        
+        if (tomaTrackingService == null) {
+            Logger.w(TAG, "obtenerHorarioTomaEnAlerta: tomaTrackingService es null");
+            return null;
+        }
+        
         List<TomaProgramada> tomas = tomaTrackingService.obtenerTomasMedicamento(medicamento.getId());
+        if (tomas == null || tomas.isEmpty()) {
+            return null;
+        }
         
         for (TomaProgramada toma : tomas) {
+            if (toma == null) {
+                continue;
+            }
+            
             if (!toma.isTomada() && 
                 (toma.getEstado() == TomaProgramada.EstadoTomaProgramada.ALERTA_ROJA ||
                  toma.getEstado() == TomaProgramada.EstadoTomaProgramada.RETRASO)) {
-                return toma.getHorario();
+                String horario = toma.getHorario();
+                if (horario != null && !horario.isEmpty()) {
+                    return horario;
+                }
             }
         }
         

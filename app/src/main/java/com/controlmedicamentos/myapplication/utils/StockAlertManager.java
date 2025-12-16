@@ -19,8 +19,12 @@ public class StockAlertManager {
      * Constructor.
      * 
      * @param context El contexto de la aplicación.
+     * @throws IllegalArgumentException si context es null
      */
     public StockAlertManager(Context context) {
+        if (context == null) {
+            throw new IllegalArgumentException("Context no puede ser null");
+        }
         this.context = context;
         this.preferences = context.getSharedPreferences(Constants.PREF_NAME, Context.MODE_PRIVATE);
     }

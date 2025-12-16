@@ -51,6 +51,15 @@ public class TomaActionHandler {
     public TomaActionHandler(Context context,
                             FirebaseService firebaseService,
                             TomaTrackingService tomaTrackingService) {
+        if (context == null) {
+            throw new IllegalArgumentException("Context no puede ser null");
+        }
+        if (firebaseService == null) {
+            throw new IllegalArgumentException("FirebaseService no puede ser null");
+        }
+        if (tomaTrackingService == null) {
+            throw new IllegalArgumentException("TomaTrackingService no puede ser null");
+        }
         this.context = context;
         this.firebaseService = firebaseService;
         this.tomaTrackingService = tomaTrackingService;
@@ -58,6 +67,9 @@ public class TomaActionHandler {
 
     /**
      * Marca una toma como realizada.
+     * 
+     * @param medicamento El medicamento. No debe ser null.
+     * @param callback El callback para notificar el resultado. Puede ser null.
      * 
      * @param medicamento El medicamento para el cual registrar la toma.
      * @param callback El callback para notificar el resultado.
@@ -202,12 +214,28 @@ public class TomaActionHandler {
     /**
      * Pospone una toma.
      * 
-     * @param medicamento El medicamento.
-     * @param horarioToma El horario de la toma a posponer.
-     * @return true si se pudo posponer, false si ya se alcanzó el máximo.
+     * @param medicamento El medicamento. No debe ser null.
+     * @param horarioToma El horario de la toma a posponer. No debe ser null ni vacío.
+     * @return true si se pudo posponer, false si ya se alcanzó el máximo o hay error.
      */
     public boolean posponerToma(Medicamento medicamento, String horarioToma) {
-        if (medicamento == null || horarioToma == null) {
+        if (medicamento == null) {
+            Logger.e("TomaActionHandler", "posponerToma: medicamento es null");
+            return false;
+        }
+        
+        if (horarioToma == null || horarioToma.trim().isEmpty()) {
+            Logger.e("TomaActionHandler", "posponerToma: horarioToma es null o vacío");
+            return false;
+        }
+        
+        if (tomaTrackingService == null) {
+            Logger.e("TomaActionHandler", "posponerToma: tomaTrackingService es null");
+            return false;
+        }
+        
+        if (context == null) {
+            Logger.e("TomaActionHandler", "posponerToma: context es null");
             return false;
         }
         
