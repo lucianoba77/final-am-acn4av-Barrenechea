@@ -768,6 +768,15 @@ public class FirebaseService {
                         if (!idsDuplicados.isEmpty()) {
                             Logger.w(TAG, "obtenerMedicamentos: ⚠️ IDs duplicados encontrados: " + idsDuplicados.toString());
                         }
+                        
+                        Logger.d(TAG, "obtenerMedicamentos: ========== LISTA COMPLETA DE MEDICAMENTOS ==========");
+                        for (int i = 0; i < medicamentos.size(); i++) {
+                            Medicamento m = medicamentos.get(i);
+                            Logger.d(TAG, String.format("obtenerMedicamentos: [%d] %s (ID: %s, TomasDiarias: %d, StockActual: %d, Activo: %s, Pausado: %s)", 
+                                i, m.getNombre(), m.getId(), m.getTomasDiarias(), m.getStockActual(), m.isActivo(), m.isPausado()));
+                        }
+                        Logger.d(TAG, "obtenerMedicamentos: ===================================================");
+                        
                         if (callback != null) {
                             callback.onSuccess(medicamentos);
                         }
@@ -823,8 +832,12 @@ public class FirebaseService {
             return;
         }
 
+        String userId = firebaseUser.getUid();
+        Logger.d(TAG, "obtenerMedicamentosActivos: Iniciando consulta para userId: " + userId);
+        Logger.d(TAG, "obtenerMedicamentosActivos: Filtros aplicados - activo=true, pausado=false");
+
         db.collection(COLLECTION_MEDICAMENTOS)
-            .whereEqualTo("userId", firebaseUser.getUid())
+            .whereEqualTo("userId", userId)
             .whereEqualTo("activo", true)
             .whereEqualTo("pausado", false)
             .get()
@@ -832,16 +845,46 @@ public class FirebaseService {
                 @Override
                 public void onComplete(@NonNull Task<QuerySnapshot> task) {
                     if (task.isSuccessful()) {
+                        QuerySnapshot querySnapshot = task.getResult();
+                        Logger.d(TAG, "obtenerMedicamentosActivos: Consulta exitosa. Documentos encontrados: " + 
+                            (querySnapshot != null ? querySnapshot.size() : 0));
+                        
                         List<Medicamento> medicamentos = new ArrayList<>();
-                        for (DocumentSnapshot document : task.getResult()) {
-                            Medicamento medicamento = mapToMedicamento(document);
-                            medicamentos.add(medicamento);
+                        if (querySnapshot != null) {
+                            for (DocumentSnapshot document : querySnapshot) {
+                                String docId = document.getId();
+                                Logger.d(TAG, "obtenerMedicamentosActivos: Procesando documento ID: " + docId);
+                                
+                                Medicamento medicamento = mapToMedicamento(document);
+                                if (medicamento != null) {
+                                    Logger.d(TAG, "obtenerMedicamentosActivos: Medicamento mapeado - ID: " + medicamento.getId() + 
+                                        ", Nombre: " + medicamento.getNombre() + 
+                                        ", TomasDiarias: " + medicamento.getTomasDiarias() + 
+                                        ", StockActual: " + medicamento.getStockActual() +
+                                        ", Activo: " + medicamento.isActivo() +
+                                        ", Pausado: " + medicamento.isPausado());
+                                    medicamentos.add(medicamento);
+                                } else {
+                                    Logger.e(TAG, "obtenerMedicamentosActivos: ⚠️ ERROR - Medicamento null para documento ID: " + docId);
+                                }
+                            }
                         }
+                        
+                        Logger.d(TAG, "obtenerMedicamentosActivos: Total medicamentos activos procesados: " + medicamentos.size());
+                        Logger.d(TAG, "obtenerMedicamentosActivos: ========== LISTA DE MEDICAMENTOS ACTIVOS ==========");
+                        for (int i = 0; i < medicamentos.size(); i++) {
+                            Medicamento m = medicamentos.get(i);
+                            Logger.d(TAG, String.format("obtenerMedicamentosActivos: [%d] %s (ID: %s, TomasDiarias: %d, StockActual: %d)", 
+                                i, m.getNombre(), m.getId(), m.getTomasDiarias(), m.getStockActual()));
+                        }
+                        Logger.d(TAG, "obtenerMedicamentosActivos: =================================================");
+                        
                         if (callback != null) {
                             callback.onSuccess(medicamentos);
                         }
                     } else {
                         Log.e(TAG, "Error al obtener medicamentos activos", task.getException());
+                        Logger.e(TAG, "obtenerMedicamentosActivos: Error en consulta", task.getException());
                         if (callback != null) {
                             callback.onError(task.getException());
                         }

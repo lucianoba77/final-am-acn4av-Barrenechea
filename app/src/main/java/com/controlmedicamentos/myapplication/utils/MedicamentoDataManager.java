@@ -123,6 +123,8 @@ public class MedicamentoDataManager {
                             medicamentosActivos.add(med);
                         }
                     }
+                    Logger.d("MedicamentoDataManager", "Medicamentos activos y no pausados: " + medicamentosActivos.size() + 
+                        " de " + todosLosMedicamentos.size());
                     
                     // Inicializar tomas del día solo para medicamentos activos y no pausados
                     for (Medicamento med : medicamentosActivos) {
@@ -137,9 +139,18 @@ public class MedicamentoDataManager {
                     tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
                     
                     // Filtrar medicamentos usando la clase utilitaria (usar medicamentosActivos para consistencia)
+                    Logger.d("MedicamentoDataManager", "Aplicando filtro para dashboard a " + medicamentosActivos.size() + " medicamentos activos");
                     List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
                         medicamentosActivos, tomaTrackingService
                     );
+                    Logger.d("MedicamentoDataManager", "Medicamentos para dashboard después del filtro: " + medicamentosParaDashboard.size());
+                    Logger.d("MedicamentoDataManager", "========== MEDICAMENTOS FINALES PARA DASHBOARD ==========");
+                    for (int i = 0; i < medicamentosParaDashboard.size(); i++) {
+                        Medicamento m = medicamentosParaDashboard.get(i);
+                        Logger.d("MedicamentoDataManager", String.format("[%d] %s (ID: %s, TomasDiarias: %d, StockActual: %d)", 
+                            i, m.getNombre(), m.getId(), m.getTomasDiarias(), m.getStockActual()));
+                    }
+                    Logger.d("MedicamentoDataManager", "========================================================");
                     
                     if (callback != null) {
                         callback.onDataLoaded(medicamentosParaDashboard, todosLosMedicamentos);
@@ -193,6 +204,8 @@ public class MedicamentoDataManager {
                                     medicamentosActivos.add(med);
                                 }
                             }
+                            Logger.d("MedicamentoDataManager", "Listener: Medicamentos activos y no pausados: " + medicamentosActivos.size() + 
+                                " de " + todosLosMedicamentos.size());
                             
                             // Inicializar tomas del día para cada medicamento activo
                             for (Medicamento med : medicamentosActivos) {
@@ -203,9 +216,11 @@ public class MedicamentoDataManager {
                             tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
                             
                             // Filtrar medicamentos usando la clase utilitaria
+                            Logger.d("MedicamentoDataManager", "Listener: Aplicando filtro para dashboard a " + medicamentosActivos.size() + " medicamentos activos");
                             List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
                                 medicamentosActivos, tomaTrackingService
                             );
+                            Logger.d("MedicamentoDataManager", "Listener: Medicamentos para dashboard después del filtro: " + medicamentosParaDashboard.size());
                             
                             listenerYaActualizo = true;
                             

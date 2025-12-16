@@ -25,7 +25,9 @@ import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
 import com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper;
 import com.controlmedicamentos.myapplication.utils.Logger;
+import com.controlmedicamentos.myapplication.utils.MedicamentoFilter;
 import com.controlmedicamentos.myapplication.utils.NavigationHelper;
+import com.controlmedicamentos.myapplication.services.TomaTrackingService;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -64,6 +66,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     private AuthService authService;
     private FirebaseService firebaseService;
     private GoogleCalendarSyncHelper googleCalendarSyncHelper;
+    private TomaTrackingService tomaTrackingService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,6 +93,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         authService = new AuthService();
         firebaseService = new FirebaseService();
         googleCalendarSyncHelper = new GoogleCalendarSyncHelper(this);
+        tomaTrackingService = new TomaTrackingService(this);
 
         // Verificar autenticación
         if (!authService.isUserLoggedIn()) {
@@ -211,6 +215,113 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 Logger.d(TAG, String.format("cargarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
                     medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
                 
+                // VERIFICACIÓN CRÍTICA: Comparar con medicamentos activos del dashboard
+                // Crear copias finales de las listas para usar en la clase interna
+                final List<Medicamento> medicamentosTratamientoFinal = new ArrayList<>(medicamentosTratamiento);
+                final List<Medicamento> medicamentosTratamientoSinStockFinal = new ArrayList<>(medicamentosTratamientoSinStock);
+                final List<Medicamento> medicamentosOcasionalesFinal = new ArrayList<>(medicamentosOcasionales);
+                final List<Medicamento> todosLosMedicamentosFinal = new ArrayList<>(todosLosMedicamentos);
+                
+                Logger.d(TAG, "cargarMedicamentos: ========== VERIFICACIÓN DE COMPATIBILIDAD CON DASHBOARD ==========");
+                // Usar el mismo proceso que MainActivity: obtener activos, inicializar tomas, y aplicar filtro
+                firebaseService.obtenerMedicamentosActivos(new FirebaseService.FirestoreListCallback() {
+                    @Override
+                    public void onSuccess(List<?> result) {
+                        if (result != null) {
+                            @SuppressWarnings("unchecked")
+                            List<Medicamento> medicamentosActivos = (List<Medicamento>) result;
+                            Logger.d(TAG, "cargarMedicamentos: Medicamentos activos y no pausados: " + medicamentosActivos.size());
+                            
+                            // Inicializar tomas del día para todos los medicamentos activos (igual que MainActivity)
+                            for (Medicamento med : medicamentosActivos) {
+                                tomaTrackingService.inicializarTomasDia(med);
+                            }
+                            
+                            // Marcar tomas omitidas después de las 01:01hs (igual que MainActivity)
+                            tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
+                            
+                            // Aplicar el mismo filtro que usa el dashboard (igual que MainActivity)
+                            List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
+                                medicamentosActivos, tomaTrackingService
+                            );
+                            Logger.d(TAG, "cargarMedicamentos: Medicamentos que realmente se muestran en el dashboard: " + medicamentosParaDashboard.size());
+                            
+                            // Crear conjunto de IDs de medicamentos en el botiquín
+                            Set<String> idsEnBotiquin = new HashSet<>();
+                            for (Medicamento m : medicamentosTratamientoFinal) {
+                                idsEnBotiquin.add(m.getId());
+                            }
+                            for (Medicamento m : medicamentosTratamientoSinStockFinal) {
+                                idsEnBotiquin.add(m.getId());
+                            }
+                            for (Medicamento m : medicamentosOcasionalesFinal) {
+                                idsEnBotiquin.add(m.getId());
+                            }
+                            
+                            // Verificar qué medicamentos del dashboard (después del filtro) NO están en el botiquín
+                            List<String> medicamentosFaltantes = new ArrayList<>();
+                            for (Medicamento m : medicamentosParaDashboard) {
+                                if (!idsEnBotiquin.contains(m.getId())) {
+                                    medicamentosFaltantes.add(m.getNombre() + " (ID: " + m.getId() + ")");
+                                    Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - Medicamento del dashboard NO encontrado en botiquín: " + 
+                                        m.getNombre() + " (ID: " + m.getId() + ", TomasDiarias: " + m.getTomasDiarias() + 
+                                        ", StockActual: " + m.getStockActual() + ", Activo: " + m.isActivo() + 
+                                        ", Pausado: " + m.isPausado() + ")");
+                                }
+                            }
+                            
+                            if (!medicamentosFaltantes.isEmpty()) {
+                                Logger.e(TAG, "cargarMedicamentos: ❌ ERROR CRÍTICO - " + medicamentosFaltantes.size() + 
+                                    " medicamentos del dashboard NO están en el botiquín: " + medicamentosFaltantes.toString());
+                            } else {
+                                Logger.d(TAG, "cargarMedicamentos: ✅ Todos los medicamentos del dashboard están en el botiquín");
+                            }
+                            
+                            // Verificar qué medicamentos activos NO están en el dashboard (porque no tienen tomas válidas)
+                            Set<String> idsEnDashboard = new HashSet<>();
+                            for (Medicamento m : medicamentosParaDashboard) {
+                                idsEnDashboard.add(m.getId());
+                            }
+                            List<String> medicamentosActivosNoEnDashboard = new ArrayList<>();
+                            for (Medicamento m : medicamentosActivos) {
+                                if (!idsEnDashboard.contains(m.getId())) {
+                                    medicamentosActivosNoEnDashboard.add(m.getNombre() + " (ID: " + m.getId() + 
+                                        ", TomasDiarias: " + m.getTomasDiarias() + ", StockActual: " + m.getStockActual() + ")");
+                                }
+                            }
+                            if (!medicamentosActivosNoEnDashboard.isEmpty()) {
+                                Logger.d(TAG, "cargarMedicamentos: ℹ️ " + medicamentosActivosNoEnDashboard.size() + 
+                                    " medicamentos activos NO están en el dashboard (sin tomas válidas pendientes): " + 
+                                    medicamentosActivosNoEnDashboard.toString());
+                            }
+                            
+                            // Verificar qué medicamentos están en el botiquín pero no son activos (esto es esperado)
+                            Set<String> idsActivos = new HashSet<>();
+                            for (Medicamento m : medicamentosActivos) {
+                                idsActivos.add(m.getId());
+                            }
+                            List<String> medicamentosSoloEnBotiquin = new ArrayList<>();
+                            for (Medicamento m : todosLosMedicamentosFinal) {
+                                if (!idsActivos.contains(m.getId())) {
+                                    medicamentosSoloEnBotiquin.add(m.getNombre() + " (ID: " + m.getId() + 
+                                        ", Activo: " + m.isActivo() + ", Pausado: " + m.isPausado() + ")");
+                                }
+                            }
+                            if (!medicamentosSoloEnBotiquin.isEmpty()) {
+                                Logger.d(TAG, "cargarMedicamentos: ℹ️ " + medicamentosSoloEnBotiquin.size() + 
+                                    " medicamentos están solo en el botiquín (esperado para pausados/inactivos): " + 
+                                    medicamentosSoloEnBotiquin.toString());
+                            }
+                        }
+                        Logger.d(TAG, "cargarMedicamentos: ================================================================");
+                    }
+                    
+                    @Override
+                    public void onError(Exception exception) {
+                        Logger.e(TAG, "cargarMedicamentos: Error al obtener medicamentos activos para comparación", exception);
+                    }
+                });
+                
                 // Log detallado de cada sección
                 Logger.d(TAG, "=== TRATAMIENTOS (CON STOCK) ===");
                 for (int i = 0; i < medicamentosTratamiento.size(); i++) {
@@ -229,6 +340,9 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                     Medicamento m = medicamentosOcasionales.get(i);
                     Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
                 }
+                
+                // Crear variable final para usar en el lambda (ya creada arriba)
+                final int totalMedicamentos = todosLosMedicamentos.size();
                 
                 // Actualizar adapters en el hilo principal
                 Logger.d(TAG, "cargarMedicamentos: Actualizando adapters en hilo principal...");
@@ -256,21 +370,30 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                     actualizarVisibilidadSecciones();
                     
                     Logger.d(TAG, "cargarMedicamentos: [UI Thread] Actualización de UI completada");
+                    
+                    Log.d(TAG, "Medicamentos cargados: " + medicamentosTratamiento.size() + " con tratamiento (con stock), " + 
+                          medicamentosTratamientoSinStock.size() + " con tratamiento (sin stock), " +
+                          medicamentosOcasionales.size() + " ocasionales");
+                    
+                    if (todosLosMedicamentosFinal.isEmpty()) {
+                        Toast.makeText(BotiquinActivity.this, "No tienes medicamentos registrados", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Contar solo medicamentos no-null para la validación (separarMedicamentos salta nulls)
+                        int medicamentosNoNull = 0;
+                        for (Medicamento m : todosLosMedicamentosFinal) {
+                            if (m != null) {
+                                medicamentosNoNull++;
+                            }
+                        }
+                        int sumaSecciones = medicamentosTratamiento.size() + medicamentosTratamientoSinStock.size() + medicamentosOcasionales.size();
+                        if (sumaSecciones != medicamentosNoNull) {
+                            Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - La suma de secciones no coincide con el total de medicamentos no-null. Total no-null: " + 
+                                medicamentosNoNull + ", Suma secciones: " + sumaSecciones);
+                        }
+                    }
+                    
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] ========== CARGA COMPLETADA ==========");
                 });
-                
-                Log.d(TAG, "Medicamentos cargados: " + medicamentosTratamiento.size() + " con tratamiento (con stock), " + 
-                      medicamentosTratamientoSinStock.size() + " con tratamiento (sin stock), " +
-                      medicamentosOcasionales.size() + " ocasionales");
-                
-                if (todosLosMedicamentos.isEmpty()) {
-                    Toast.makeText(BotiquinActivity.this, "No tienes medicamentos registrados", Toast.LENGTH_SHORT).show();
-                } else if (medicamentosTratamiento.size() + medicamentosTratamientoSinStock.size() + medicamentosOcasionales.size() != todosLosMedicamentos.size()) {
-                    Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - La suma de secciones no coincide con el total. Total: " + 
-                        todosLosMedicamentos.size() + ", Suma secciones: " + 
-                        (medicamentosTratamiento.size() + medicamentosTratamientoSinStock.size() + medicamentosOcasionales.size()));
-                }
-                
-                Logger.d(TAG, "cargarMedicamentos: ========== CARGA COMPLETADA ==========");
             }
 
             @Override
@@ -300,29 +423,47 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
             int tomasDiarias = medicamento.getTomasDiarias();
             int stockActual = medicamento.getStockActual();
             boolean pausado = medicamento.isPausado();
+            boolean activo = medicamento.isActivo();
             
-            Logger.d(TAG, String.format("separarMedicamentos: Procesando '%s' - TomasDiarias=%d, StockActual=%d, Pausado=%s", 
-                nombre, tomasDiarias, stockActual, pausado));
+            Logger.d(TAG, String.format("separarMedicamentos: Procesando '%s' - TomasDiarias=%d, StockActual=%d, Pausado=%s, Activo=%s", 
+                nombre, tomasDiarias, stockActual, pausado, activo));
             
             // Medicamentos con tratamiento: tomasDiarias > 0
             if (tomasDiarias > 0) {
                 // Separar por stock: si tiene stock (stockActual > 0) va a tratamiento, si no tiene stock va a tratamiento sin stock
+                // IMPORTANTE: Incluir medicamentos pausados e inactivos en el botiquín para mostrar el inventario completo
                 if (stockActual > 0) {
                     medicamentosTratamiento.add(medicamento);
-                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (con stock)", nombre));
+                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (con stock) - Pausado: %s, Activo: %s", 
+                        nombre, pausado, activo));
                 } else {
                     medicamentosTratamientoSinStock.add(medicamento);
-                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (sin stock)", nombre));
+                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (sin stock) - Pausado: %s, Activo: %s", 
+                        nombre, pausado, activo));
                 }
             } else {
                 // Medicamentos ocasionales: tomasDiarias = 0
+                // IMPORTANTE: Incluir medicamentos pausados e inactivos en el botiquín para mostrar el inventario completo
                 medicamentosOcasionales.add(medicamento);
-                Logger.d(TAG, String.format("separarMedicamentos: '%s' -> OCASIONAL", nombre));
+                Logger.d(TAG, String.format("separarMedicamentos: '%s' -> OCASIONAL - Pausado: %s, Activo: %s", 
+                    nombre, pausado, activo));
             }
         }
         
         Logger.d(TAG, String.format("separarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
             medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
+        
+        // Log adicional para comparar con dashboard
+        int medicamentosPausados = 0;
+        int medicamentosInactivos = 0;
+        int medicamentosActivosNoPausados = 0;
+        for (Medicamento m : todosLosMedicamentos) {
+            if (m.isPausado()) medicamentosPausados++;
+            if (!m.isActivo()) medicamentosInactivos++;
+            if (m.isActivo() && !m.isPausado()) medicamentosActivosNoPausados++;
+        }
+        Logger.d(TAG, String.format("separarMedicamentos: RESUMEN - Total: %d, Activos/NoPausados: %d (dashboard), Pausados: %d, Inactivos: %d",
+            todosLosMedicamentos.size(), medicamentosActivosNoPausados, medicamentosPausados, medicamentosInactivos));
     }
 
     private void actualizarVisibilidadSecciones() {

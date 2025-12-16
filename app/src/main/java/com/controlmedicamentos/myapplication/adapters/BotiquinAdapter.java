@@ -144,6 +144,13 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
 
             // Configurar estado y fecha de vencimiento
             boolean estaVencido = medicamento.estaVencido();
+            boolean pausado = medicamento.isPausado();
+            boolean activo = medicamento.isActivo();
+            
+            // Log para debugging
+            android.util.Log.d("BotiquinAdapter", String.format("bind: '%s' - Vencido: %s, Pausado: %s, Activo: %s, Stock: %d, TomasDiarias: %d",
+                medicamento.getNombre(), estaVencido, pausado, activo, medicamento.getStockActual(), medicamento.getTomasDiarias()));
+            
             if (estaVencido) {
                 tvEstado.setText("Vencido");
                 tvEstado.setTextColor(context.getColor(R.color.error));
@@ -153,50 +160,52 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
                 btnEditar.setVisibility(View.VISIBLE);
                 btnEliminar.setVisibility(View.VISIBLE);
             } else {
-                // Si no está vencido, mostrar estado según stock
-                if (medicamento.getStockActual() > 0) {
-                    tvEstado.setText("Activo");
-                    tvEstado.setTextColor(context.getColor(R.color.success));
-                    
-                    // Mostrar fecha de vencimiento si existe
-                    if (medicamento.getFechaVencimiento() != null) {
-                        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-                        String fechaVencimiento = dateFormat.format(medicamento.getFechaVencimiento());
-                        tvFechaVencimiento.setText("Vence: " + fechaVencimiento);
-                        tvFechaVencimiento.setVisibility(TextView.VISIBLE);
-                    } else {
-                        tvFechaVencimiento.setVisibility(TextView.GONE);
-                    }
-                    
-                    // Mostrar botón "Tomé una" solo para medicamentos ocasionales con stock > 0
-                    if (medicamento.getTomasDiarias() == 0 && medicamento.getStockActual() > 0) {
-                        btnTomeUna.setVisibility(View.VISIBLE);
-                    } else {
-                        btnTomeUna.setVisibility(View.GONE);
-                    }
-                    
-                    btnEditar.setVisibility(View.VISIBLE);
-                    btnEliminar.setVisibility(View.VISIBLE);
+                // Si no está vencido, mostrar estado según pausado, activo y stock
+                // PRIORIDAD: Pausado > Inactivo > Sin Stock > Activo
+                String estadoTexto = "";
+                int colorEstado;
+                
+                if (pausado) {
+                    // Si está pausado, mostrar "Pausado" independientemente de activo
+                    estadoTexto = "Pausado";
+                    colorEstado = context.getColor(R.color.info); // Color azul para pausado
+                } else if (!activo) {
+                    // Si no está activo y no está pausado, mostrar "Inactivo"
+                    estadoTexto = "Inactivo";
+                    colorEstado = context.getColor(R.color.secondary_text); // Color gris para inactivo
+                } else if (medicamento.getStockActual() <= 0) {
+                    // Si está activo, no pausado, pero sin stock
+                    estadoTexto = "Sin Stock";
+                    colorEstado = context.getColor(R.color.warning);
                 } else {
-                    // Sin stock
-                    tvEstado.setText("Sin Stock");
-                    tvEstado.setTextColor(context.getColor(R.color.warning));
-                    
-                    // Mostrar fecha de vencimiento si existe
-                    if (medicamento.getFechaVencimiento() != null) {
-                        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-                        String fechaVencimiento = dateFormat.format(medicamento.getFechaVencimiento());
-                        tvFechaVencimiento.setText("Vence: " + fechaVencimiento);
-                        tvFechaVencimiento.setVisibility(TextView.VISIBLE);
-                    } else {
-                        tvFechaVencimiento.setVisibility(TextView.GONE);
-                    }
-                    
-                    // No mostrar botón "Tomé una" si no hay stock
-                    btnTomeUna.setVisibility(View.GONE);
-                    btnEditar.setVisibility(View.VISIBLE);
-                    btnEliminar.setVisibility(View.VISIBLE);
+                    // Si está activo, no pausado, y con stock
+                    estadoTexto = "Activo";
+                    colorEstado = context.getColor(R.color.success);
                 }
+                
+                tvEstado.setText(estadoTexto);
+                tvEstado.setTextColor(colorEstado);
+                android.util.Log.d("BotiquinAdapter", String.format("bind: '%s' - Estado mostrado: '%s'", medicamento.getNombre(), estadoTexto));
+                
+                // Mostrar fecha de vencimiento si existe
+                if (medicamento.getFechaVencimiento() != null) {
+                    SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+                    String fechaVencimiento = dateFormat.format(medicamento.getFechaVencimiento());
+                    tvFechaVencimiento.setText("Vence: " + fechaVencimiento);
+                    tvFechaVencimiento.setVisibility(TextView.VISIBLE);
+                } else {
+                    tvFechaVencimiento.setVisibility(TextView.GONE);
+                }
+                
+                // Mostrar botón "Tomé una" solo para medicamentos ocasionales con stock > 0, activos y no pausados
+                if (medicamento.getTomasDiarias() == 0 && medicamento.getStockActual() > 0 && activo && !pausado) {
+                    btnTomeUna.setVisibility(View.VISIBLE);
+                } else {
+                    btnTomeUna.setVisibility(View.GONE);
+                }
+                
+                btnEditar.setVisibility(View.VISIBLE);
+                btnEliminar.setVisibility(View.VISIBLE);
             }
 
             // Configurar color de fondo

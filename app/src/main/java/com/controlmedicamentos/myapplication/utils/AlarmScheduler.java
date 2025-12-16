@@ -184,6 +184,12 @@ public class AlarmScheduler {
                     programarAlarma(horarioAlertaAmarilla.getTimeInMillis(), pendingIntentAmarilla);
                 } catch (Exception e) {
                     Log.e(TAG, "Error al programar alerta amarilla para día " + dia + ": " + medicamento.getNombre(), e);
+                    // Si hay error (por ejemplo, límite alcanzado), detener la programación
+                    if (e instanceof IllegalStateException && e.getMessage() != null && 
+                        e.getMessage().contains("Maximum limit")) {
+                        Log.w(TAG, "Límite de alarmas alcanzado. Deteniendo programación de alarmas adicionales.");
+                        break;
+                    }
                 }
                 
                 // Programar alarma en el horario exacto (alerta roja)
@@ -234,6 +240,12 @@ public class AlarmScheduler {
                     programarAlarma(horarioAlertaAmarilla.getTimeInMillis(), pendingIntentAmarilla);
                 } catch (Exception e) {
                     Log.e(TAG, "Error al programar alerta amarilla para día " + dia + ": " + medicamento.getNombre(), e);
+                    // Si hay error (por ejemplo, límite alcanzado), detener la programación
+                    if (e instanceof IllegalStateException && e.getMessage() != null && 
+                        e.getMessage().contains("Maximum limit")) {
+                        Log.w(TAG, "Límite de alarmas alcanzado. Deteniendo programación de alarmas adicionales.");
+                        break;
+                    }
                 }
                 
                 // Programar alarma en el horario exacto (alerta roja)

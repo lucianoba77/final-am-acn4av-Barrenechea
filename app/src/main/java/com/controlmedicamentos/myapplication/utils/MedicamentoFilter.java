@@ -17,7 +17,8 @@ public class MedicamentoFilter {
 
     /**
      * Filtra medicamentos para mostrar en el dashboard.
-     * Solo incluye medicamentos activos con tomas válidas pendientes.
+     * Incluye todos los medicamentos activos que tienen tomas programadas para el día actual,
+     * sin importar si ya se tomaron todas las tomas o se saltaron algunas.
      * 
      * @param medicamentos Lista completa de medicamentos
      * @param trackingService Servicio de tracking de tomas
@@ -33,10 +34,10 @@ public class MedicamentoFilter {
 
         List<Medicamento> resultado = new ArrayList<>();
         Calendar ahora = Calendar.getInstance();
-        int horaActual = ahora.get(Calendar.HOUR_OF_DAY);
-        int minutoActual = ahora.get(Calendar.MINUTE);
 
-        Logger.d(TAG, "Filtrando medicamentos. Hora actual: " + horaActual + ":" + minutoActual);
+        Logger.d(TAG, "Filtrando medicamentos. Hora actual: " + ahora.get(Calendar.HOUR_OF_DAY) + ":" + ahora.get(Calendar.MINUTE));
+        Logger.d(TAG, "MedicamentoFilter: Total medicamentos recibidos para filtrar: " + medicamentos.size());
+        Logger.d(TAG, "MedicamentoFilter: ========== INICIANDO FILTRADO PARA DASHBOARD ==========");
 
         for (Medicamento med : medicamentos) {
             // Verificar condiciones básicas
@@ -50,30 +51,30 @@ public class MedicamentoFilter {
             Logger.d(TAG, "Medicamento " + med.getNombre() + ": " + 
                       (tomasMedicamento != null ? tomasMedicamento.size() : 0) + " tomas obtenidas");
 
-            // Si no hay tomas inicializadas, el medicamento es nuevo
+            // Si no hay tomas inicializadas, el medicamento es nuevo y debe aparecer
             if (tomasMedicamento == null || tomasMedicamento.isEmpty()) {
                 Logger.d(TAG, "Medicamento " + med.getNombre() + " sin tomas inicializadas, agregando al dashboard");
                 resultado.add(med);
                 continue;
             }
 
-            // Verificar si completó todas las tomas del día
-            if (trackingService.completoTodasLasTomasDelDia(med.getId())) {
-                Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: completó todas las tomas");
-                continue;
+            // Verificar si tiene tomas programadas para el día actual (sin importar si ya se tomaron o se saltaron)
+            if (tieneTomasProgramadasParaHoy(tomasMedicamento, ahora)) {
+                Logger.d(TAG, "Medicamento " + med.getNombre() + " agregado al dashboard (tiene tomas programadas para hoy)");
+                resultado.add(med);
+            } else {
+                Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no tiene tomas programadas para el día actual");
             }
-
-            // Verificar si tiene tomas válidas según la hora actual
-            if (!tieneTomasValidas(med, tomasMedicamento, trackingService, ahora, horaActual, minutoActual)) {
-                continue;
-            }
-
-            // Si llegó aquí, mostrar en dashboard
-            Logger.d(TAG, "Medicamento " + med.getNombre() + " agregado al dashboard");
-            resultado.add(med);
         }
 
         Logger.d(TAG, "Filtrado completado: " + resultado.size() + " medicamentos para mostrar en dashboard");
+        Logger.d(TAG, "MedicamentoFilter: ========== MEDICAMENTOS QUE PASARON EL FILTRO ==========");
+        for (int i = 0; i < resultado.size(); i++) {
+            Medicamento m = resultado.get(i);
+            Logger.d(TAG, String.format("MedicamentoFilter: [%d] %s (ID: %s, TomasDiarias: %d, StockActual: %d)", 
+                i, m.getNombre(), m.getId(), m.getTomasDiarias(), m.getStockActual()));
+        }
+        Logger.d(TAG, "MedicamentoFilter: ======================================================");
         return resultado;
     }
 
@@ -105,44 +106,26 @@ public class MedicamentoFilter {
     }
 
     /**
-     * Verifica si un medicamento tiene tomas válidas según la hora actual.
+     * Verifica si un medicamento tiene tomas programadas para el día actual.
+     * No importa si ya se tomaron todas las tomas o se saltaron algunas.
+     * 
+     * @param tomasMedicamento Lista de tomas programadas del medicamento
+     * @param ahora Fecha/hora actual para comparar
+     * @return true si tiene al menos una toma programada para el día actual
      */
-    private static boolean tieneTomasValidas(
-            Medicamento med,
+    private static boolean tieneTomasProgramadasParaHoy(
             List<TomaProgramada> tomasMedicamento,
-            TomaTrackingService trackingService,
-            Calendar ahora,
-            int horaActual,
-            int minutoActual) {
-
-        // Entre 00:01 y 01:00: solo mostrar si tiene tomas posponibles
-        if ((horaActual == 0 && minutoActual >= 1) || (horaActual == 1 && minutoActual == 0)) {
-            if (!trackingService.tieneTomasPosponibles(med.getId())) {
-                Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no tiene tomas posponibles entre 00:01-01:00");
-                return false;
-            }
-            return true;
-        }
-
-        // Después de las 01:01hs: verificar si tiene tomas válidas (futuras o pasadas menos de 1 hora)
-        if (horaActual >= 1 && minutoActual >= 1) {
-            return tieneTomasValidasDespuesDe0101(med, tomasMedicamento, trackingService, ahora);
-        }
-
-        // Antes de las 01:01hs: verificar si tiene tomas válidas (futuras o pasadas menos de 1 hora)
-        return tieneTomasValidasAntesDe0101(med, tomasMedicamento, trackingService, ahora);
-    }
-
-    /**
-     * Verifica si tiene tomas válidas después de las 01:01hs.
-     */
-    private static boolean tieneTomasValidasDespuesDe0101(
-            Medicamento med,
-            List<TomaProgramada> tomasMedicamento,
-            TomaTrackingService trackingService,
             Calendar ahora) {
+        
+        if (tomasMedicamento == null || tomasMedicamento.isEmpty()) {
+            return false;
+        }
 
         for (TomaProgramada toma : tomasMedicamento) {
+            if (toma.getFechaHoraProgramada() == null) {
+                continue;
+            }
+            
             Calendar fechaToma = Calendar.getInstance();
             fechaToma.setTime(toma.getFechaHoraProgramada());
 
@@ -150,83 +133,13 @@ public class MedicamentoFilter {
             boolean esDelDiaActual = fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
                                    fechaToma.get(Calendar.DAY_OF_YEAR) == ahora.get(Calendar.DAY_OF_YEAR);
 
-            if (!esDelDiaActual || toma.isTomada() || 
-                toma.getEstado() == TomaProgramada.EstadoTomaProgramada.OMITIDA) {
-                continue;
-            }
-
-            // Verificar si es futura
-            boolean esFutura = fechaToma.after(ahora);
-
-            // Si es futura, es válida
-            if (esFutura) {
-                Logger.d(TAG, "Medicamento " + med.getNombre() + " tiene toma válida futura: " + 
-                          String.format("%02d:%02d", fechaToma.get(Calendar.HOUR_OF_DAY), fechaToma.get(Calendar.MINUTE)));
-                return true;
-            }
-
-            // Si es pasada, verificar que no haya pasado más de 1 hora
-            Calendar fechaLimite = (Calendar) fechaToma.clone();
-            fechaLimite.add(Calendar.HOUR_OF_DAY, 1);
-            if (toma.getPosposiciones() > 0) {
-                                fechaLimite.add(Calendar.MINUTE, toma.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
-            }
-
-            if (ahora.before(fechaLimite)) {
-                Logger.d(TAG, "Medicamento " + med.getNombre() + " tiene toma válida pasada: " + 
-                          String.format("%02d:%02d", fechaToma.get(Calendar.HOUR_OF_DAY), fechaToma.get(Calendar.MINUTE)));
-                return true;
+            if (esDelDiaActual) {
+                return true; // Tiene al menos una toma programada para hoy
             }
         }
 
-        Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: después de 01:01hs sin tomas válidas del día actual");
-        return false;
+        return false; // No tiene tomas programadas para el día actual
     }
 
-    /**
-     * Verifica si tiene tomas válidas antes de las 01:01hs.
-     */
-    private static boolean tieneTomasValidasAntesDe0101(
-            Medicamento med,
-            List<TomaProgramada> tomasMedicamento,
-            TomaTrackingService trackingService,
-            Calendar ahora) {
-
-        for (TomaProgramada toma : tomasMedicamento) {
-            Calendar fechaToma = Calendar.getInstance();
-            fechaToma.setTime(toma.getFechaHoraProgramada());
-
-            // Verificar que la toma sea del día actual
-            boolean esDelDiaActual = fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
-                                   fechaToma.get(Calendar.DAY_OF_YEAR) == ahora.get(Calendar.DAY_OF_YEAR);
-
-            if (!esDelDiaActual || toma.isTomada() || 
-                toma.getEstado() == TomaProgramada.EstadoTomaProgramada.OMITIDA) {
-                continue;
-            }
-
-            // Verificar si es futura
-            boolean esFutura = fechaToma.after(ahora);
-
-            // Si es futura, es válida
-            if (esFutura) {
-                return true;
-            }
-
-            // Si es pasada, verificar que no haya pasado más de 1 hora
-            Calendar fechaLimite = (Calendar) fechaToma.clone();
-            fechaLimite.add(Calendar.HOUR_OF_DAY, 1);
-            if (toma.getPosposiciones() > 0) {
-                                fechaLimite.add(Calendar.MINUTE, toma.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
-            }
-
-            if (ahora.before(fechaLimite)) {
-                return true;
-            }
-        }
-
-        Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no tiene tomas válidas del día actual");
-        return false;
-    }
 }
 
