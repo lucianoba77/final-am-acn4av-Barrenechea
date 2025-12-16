@@ -35,7 +35,6 @@ public class AjustesActivity extends AppCompatActivity {
     private MaterialButton btnGuardar, btnDiasAntelacion, btnLogout, btnEliminarCuenta;
     private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     
-    // Google Calendar
     private SharedPreferences preferences;
     private int diasAntelacionStock = 3;
     

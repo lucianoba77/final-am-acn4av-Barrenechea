@@ -104,15 +104,21 @@ public class GoogleCalendarCallbackActivity extends AppCompatActivity {
             state = fragmentParams.get("state");
         }
         
-        Log.d(TAG, "Callback OAuth recibido. State: " + state);
+        Log.d(TAG, "Callback OAuth recibido. State: " + state + ", AccessToken: " + 
+            (accessToken != null && !accessToken.isEmpty() ? "presente" : "ausente"));
         
         // Procesar con el helper de autorización bajo demanda
         // Este helper ejecutará la acción (crear o eliminar eventos) y luego cerrará esta Activity
-        com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper.procesarCallbackOAuth(
-            this, 
-            accessToken, 
-            state
-        );
+        if (accessToken != null && !accessToken.isEmpty()) {
+            com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper.procesarCallbackOAuth(
+                this, 
+                accessToken, 
+                state
+            );
+        } else {
+            Log.e(TAG, "Access token vacío, no se puede procesar");
+            mostrarErrorYRegresar("No se pudo obtener el token de acceso");
+        }
     }
     
     /**
@@ -140,14 +146,12 @@ public class GoogleCalendarCallbackActivity extends AppCompatActivity {
     }
     
     /**
-     * Muestra un error y regresa a AjustesActivity
+     * Muestra un error y regresa a la actividad anterior
      */
     private void mostrarErrorYRegresar(String mensaje) {
         Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show();
         
-        Intent ajustesIntent = new Intent(this, AjustesActivity.class);
-        ajustesIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(ajustesIntent);
+        // Regresar a la actividad anterior (puede ser NuevaMedicinaActivity o BotiquinActivity)
         finish();
     }
 }
