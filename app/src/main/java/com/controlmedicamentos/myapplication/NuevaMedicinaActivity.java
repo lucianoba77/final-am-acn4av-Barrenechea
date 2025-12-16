@@ -298,8 +298,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                             AlarmScheduler alarmScheduler = new AlarmScheduler(NuevaMedicinaActivity.this);
                             alarmScheduler.programarAlarmasMedicamento(medicamentoGuardado);
                             
-                            // Preguntar si quiere agregar eventos a Google Calendar
-                            preguntarAgregarAGoogleCalendar(medicamentoGuardado);
+                            // Sincronizar con Google Calendar si está conectado
+                            sincronizarConGoogleCalendar(medicamentoGuardado);
                         }
                         Toast.makeText(NuevaMedicinaActivity.this, "Medicamento guardado exitosamente", Toast.LENGTH_SHORT).show();
                         finish(); // Cerrar actividad
@@ -668,19 +668,89 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     }
     
     /**
-     * Pregunta al usuario si quiere agregar eventos a Google Calendar
-     * Si acepta, inicia el flujo OAuth bajo demanda
+     * Sincroniza el medicamento con Google Calendar si está conectado
      */
-    private void preguntarAgregarAGoogleCalendar(Medicamento medicamento) {
-        Logger.d("NuevaMedicinaActivity", "Preguntando si agregar a Google Calendar para: " + 
+    private void sincronizarConGoogleCalendar(Medicamento medicamento) {
+        Logger.d("NuevaMedicinaActivity", "sincronizarConGoogleCalendar: Iniciando sincronización para medicamento: " + 
             (medicamento != null ? medicamento.getNombre() : "null"));
-        
-        // Solo preguntar si el medicamento tiene tomas diarias > 0 (no es ocasional)
-        if (medicamento != null && medicamento.getTomasDiarias() > 0) {
-            com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper helper = 
-                new com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper(this);
-            helper.preguntarYCrearEventos(medicamento);
-        }
+        // Verificar si Google Calendar está conectado
+        googleCalendarAuthService.tieneGoogleCalendarConectado(
+            new GoogleCalendarAuthService.FirestoreCallback() {
+                @Override
+                public void onSuccess(Object result) {
+                    boolean conectado = result != null && (Boolean) result;
+                    Logger.d("NuevaMedicinaActivity", "sincronizarConGoogleCalendar: tieneGoogleCalendarConectado = " + conectado);
+                    if (conectado) {
+                        // Obtener token de acceso
+                        googleCalendarAuthService.obtenerTokenGoogle(
+                            new GoogleCalendarAuthService.FirestoreCallback() {
+                                @Override
+                                public void onSuccess(Object tokenResult) {
+                                    if (tokenResult != null && tokenResult instanceof Map) {
+                                        @SuppressWarnings("unchecked")
+                                        Map<String, Object> tokenData = (Map<String, Object>) tokenResult;
+                                        String accessToken = (String) tokenData.get("access_token");
+                                        
+                                        if (accessToken != null && !accessToken.isEmpty()) {
+                                            Logger.d("NuevaMedicinaActivity", 
+                                                "Token de Google Calendar obtenido, creando eventos");
+                                            // Crear eventos recurrentes en Google Calendar
+                                            googleCalendarService.crearEventosRecurrentes(
+                                                accessToken, 
+                                                medicamento,
+                                                new GoogleCalendarService.RecurrentEventsCallback() {
+                                                    @Override
+                                                    public void onSuccess(List<String> eventoIds) {
+                                                        Logger.d("NuevaMedicinaActivity", 
+                                                            "Eventos de Google Calendar creados: " + eventoIds.size());
+                                                        
+                                                        // Guardar los IDs de eventos en el medicamento
+                                                        if (!eventoIds.isEmpty() && medicamento.getId() != null) {
+                                                            guardarEventoIdsEnMedicamento(medicamento.getId(), eventoIds);
+                                                        }
+                                                    }
+                                                    
+                                                    @Override
+                                                    public void onError(Exception exception) {
+                                                        Logger.w("NuevaMedicinaActivity", 
+                                                            "Error al crear eventos en Google Calendar", exception);
+                                                        // No mostrar error al usuario, es opcional
+                                                    }
+                                                }
+                                            );
+                                        } else {
+                                            Logger.w("NuevaMedicinaActivity", 
+                                                "Token de Google Calendar no disponible o vacío");
+                                        }
+                                    } else {
+                                        Logger.w("NuevaMedicinaActivity", 
+                                            "Token de Google Calendar es null o no es un Map");
+                                    }
+                                }
+                                
+                                @Override
+                                public void onError(Exception exception) {
+                                    Logger.w("NuevaMedicinaActivity", 
+                                        "Error al obtener token de Google Calendar", exception);
+                                    // No intentar crear eventos si no se pudo obtener el token
+                                    // El error ya está logueado para debugging
+                                }
+                            }
+                        );
+                    } else {
+                        Logger.d("NuevaMedicinaActivity", 
+                            "Google Calendar no está conectado, omitiendo sincronización");
+                    }
+                }
+                
+                @Override
+                public void onError(Exception exception) {
+                    Logger.w("NuevaMedicinaActivity", 
+                        "Error al verificar conexión de Google Calendar", exception);
+                    // No mostrar error al usuario, es opcional
+                }
+            }
+        );
     }
     
     /**

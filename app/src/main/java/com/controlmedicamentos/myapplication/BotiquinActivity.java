@@ -235,38 +235,36 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                         return;
                     }
 
-                    // Cancelar alarmas antes de eliminar
-                    AlarmScheduler alarmScheduler = new AlarmScheduler(BotiquinActivity.this);
-                    alarmScheduler.cancelarAlarmasMedicamento(medicamento);
-                    
-                    // Verificar si hay eventos de Google Calendar y preguntar si quiere eliminarlos
-                    verificarYPreguntarEliminarEventos(medicamento.getId());
+                        // Cancelar alarmas antes de eliminar
+                        AlarmScheduler alarmScheduler = new AlarmScheduler(BotiquinActivity.this);
+                        alarmScheduler.cancelarAlarmasMedicamento(medicamento);
+                        
+                        // Eliminar eventos de Google Calendar antes de eliminar el medicamento
+                        // Nota: La eliminación del medicamento debe ocurrir incluso si falla la sincronización
+                        googleCalendarSyncHelper.eliminarEventosMedicamento(medicamento.getId(), 
+                            new GoogleCalendarSyncHelper.SyncCallback() {
+                                @Override
+                                public void onSuccess() {
+                                    // Después de eliminar eventos (o si no hay eventos), eliminar el medicamento
+                                    eliminarMedicamentoDeFirestore(medicamento.getId());
+                                }
+
+                                @Override
+                                public void onError(Exception exception) {
+                                    // Si falla la sincronización con Google Calendar, aún así eliminar el medicamento
+                                    // La sincronización con Google Calendar no es crítica para la eliminación
+                                    Logger.w("BotiquinActivity", 
+                                        "Error al eliminar eventos de Google Calendar, continuando con eliminación del medicamento", 
+                                        exception);
+                                    eliminarMedicamentoDeFirestore(medicamento.getId());
+                                }
+                            }
+                        );
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
     }
     
-    /**
-     * Verifica si hay eventos de Google Calendar y pregunta si quiere eliminarlos
-     */
-    private void verificarYPreguntarEliminarEventos(String medicamentoId) {
-        googleCalendarSyncHelper.obtenerEventoIds(medicamentoId, eventoIds -> {
-            if (eventoIds != null && !eventoIds.isEmpty()) {
-                // Hay eventos, preguntar si quiere eliminarlos
-                com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper helper = 
-                    new com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper(BotiquinActivity.this);
-                helper.preguntarYEliminarEventos(medicamentoId, eventoIds, () -> {
-                    // Callback: continuar con la eliminación del medicamento
-                    eliminarMedicamentoDeFirestore(medicamentoId);
-                });
-            } else {
-                // No hay eventos, eliminar directamente el medicamento
-                eliminarMedicamentoDeFirestore(medicamentoId);
-            }
-        });
-    }
-    
-
     /**
      * Elimina un medicamento de Firestore.
      * Este método se llama después de intentar eliminar los eventos de Google Calendar,
@@ -463,16 +461,5 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     protected void onResume() {
         super.onResume();
         cargarMedicamentos();
-        
-        // Verificar si hay un medicamento pendiente para eliminar después de eliminar eventos
-        String medicamentoId = com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper
-            .obtenerMedicamentoPendienteEliminar(this);
-        if (medicamentoId != null) {
-            // Limpiar el flag
-            com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper
-                .limpiarFlagEliminacionMedicamento(this);
-            // Continuar con la eliminación del medicamento
-            eliminarMedicamentoDeFirestore(medicamentoId);
-        }
     }
 }
