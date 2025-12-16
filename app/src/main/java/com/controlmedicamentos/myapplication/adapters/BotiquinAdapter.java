@@ -159,7 +159,7 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
 
             // Configurar color de fondo
             cardMedicamento.setCardBackgroundColor(medicamento.getColor());
-            
+
             // Mejorar contraste de texto según el color de fondo
             // Usar texto más oscuro para mejor legibilidad
             int textColorDark = context.getColor(android.R.color.black);

@@ -23,6 +23,7 @@ import com.controlmedicamentos.myapplication.services.AuthService;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
+import com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -54,6 +55,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     
     private AuthService authService;
     private FirebaseService firebaseService;
+    private GoogleCalendarSyncHelper googleCalendarSyncHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,6 +81,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         // Inicializar servicios
         authService = new AuthService();
         firebaseService = new FirebaseService();
+        googleCalendarSyncHelper = new GoogleCalendarSyncHelper(this);
 
         // Verificar autenticación
         if (!authService.isUserLoggedIn()) {
@@ -253,21 +256,33 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                         AlarmScheduler alarmScheduler = new AlarmScheduler(BotiquinActivity.this);
                         alarmScheduler.cancelarAlarmasMedicamento(medicamento);
                         
-                        firebaseService.eliminarMedicamento(medicamento.getId(), new FirebaseService.FirestoreCallback() {
-                            @Override
-                            public void onSuccess(Object result) {
-                                Toast.makeText(BotiquinActivity.this, "Medicamento eliminado", Toast.LENGTH_SHORT).show();
-                                cargarMedicamentos();
-                            }
+                        // Eliminar eventos de Google Calendar antes de eliminar el medicamento
+                        googleCalendarSyncHelper.eliminarEventosMedicamento(medicamento.getId(), 
+                            new GoogleCalendarSyncHelper.SyncCallback() {
+                                @Override
+                                public void onSuccess() {
+                                    // Después de eliminar eventos, eliminar el medicamento
+                                    firebaseService.eliminarMedicamento(medicamento.getId(), 
+                                        new FirebaseService.FirestoreCallback() {
+                                            @Override
+                                            public void onSuccess(Object result) {
+                                                Toast.makeText(BotiquinActivity.this, 
+                                                    "Medicamento eliminado", Toast.LENGTH_SHORT).show();
+                                                cargarMedicamentos();
+                                            }
 
-                            @Override
-                            public void onError(Exception exception) {
-                                Toast.makeText(BotiquinActivity.this, 
-                                    "Error al eliminar medicamento: " + 
-                                    (exception != null ? exception.getMessage() : "Error desconocido"), 
-                                    Toast.LENGTH_LONG).show();
+                                            @Override
+                                            public void onError(Exception exception) {
+                                                Toast.makeText(BotiquinActivity.this, 
+                                                    "Error al eliminar medicamento: " + 
+                                                    (exception != null ? exception.getMessage() : "Error desconocido"), 
+                                                    Toast.LENGTH_LONG).show();
+                                            }
+                                        }
+                                    );
+                                }
                             }
-                        });
+                        );
                     }
                 })
                 .setNegativeButton("Cancelar", null)
@@ -322,28 +337,31 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         firebaseService.guardarToma(toma, new FirebaseService.FirestoreCallback() {
             @Override
             public void onSuccess(Object result) {
-                firebaseService.actualizarMedicamento(medicamento, new FirebaseService.FirestoreCallback() {
-                    @Override
-                    public void onSuccess(Object updateResult) {
-                        Toast.makeText(BotiquinActivity.this,
-                                "Toma registrada. Stock actualizado.",
-                                Toast.LENGTH_SHORT).show();
-                        if (tratamientoCompletado) {
+                // Pasar contexto para gestionar Google Calendar si se pausa
+                firebaseService.actualizarMedicamento(medicamento, BotiquinActivity.this, 
+                    new FirebaseService.FirestoreCallback() {
+                        @Override
+                        public void onSuccess(Object updateResult) {
                             Toast.makeText(BotiquinActivity.this,
-                                    "Tratamiento de " + medicamento.getNombre() + " completado.",
+                                    "Toma registrada. Stock actualizado.",
+                                    Toast.LENGTH_SHORT).show();
+                            if (tratamientoCompletado) {
+                                Toast.makeText(BotiquinActivity.this,
+                                        "Tratamiento de " + medicamento.getNombre() + " completado.",
+                                        Toast.LENGTH_LONG).show();
+                            }
+                            cargarMedicamentos();
+                        }
+
+                        @Override
+                        public void onError(Exception exception) {
+                            revertirCambiosMedicamento(medicamento, stockAnterior, diasRestantesAnteriores, estabaPausado);
+                            Toast.makeText(BotiquinActivity.this,
+                                    "Error al actualizar el medicamento",
                                     Toast.LENGTH_LONG).show();
                         }
-                        cargarMedicamentos();
                     }
-
-                    @Override
-                    public void onError(Exception exception) {
-                        revertirCambiosMedicamento(medicamento, stockAnterior, diasRestantesAnteriores, estabaPausado);
-                        Toast.makeText(BotiquinActivity.this,
-                                "Error al actualizar el medicamento",
-                                Toast.LENGTH_LONG).show();
-                    }
-                });
+                );
             }
 
             @Override

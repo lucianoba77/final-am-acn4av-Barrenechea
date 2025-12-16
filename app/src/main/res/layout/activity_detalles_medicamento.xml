@@ -96,7 +96,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="match_parent"
                                 android:scaleType="fitCenter"
-                                android:src="@android:drawable/ic_menu_info_details"
+                            android:src="@android:drawable/ic_menu_info_details"
                                 android:contentDescription="@string/medicine_icon"
                                 android:tint="@color/primary" />
                         </FrameLayout>

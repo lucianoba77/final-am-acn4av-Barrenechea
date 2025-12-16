@@ -1,6 +1,7 @@
 package com.controlmedicamentos.myapplication.models;
 
 import com.controlmedicamentos.myapplication.R;
+import com.controlmedicamentos.myapplication.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -144,7 +145,7 @@ public class Medicamento {
         // Verificar que horarioPrimeraToma no sea null o vacío
         if (horarioPrimeraToma == null || horarioPrimeraToma.isEmpty()) {
             // Usar valor por defecto si no está establecido
-            horarioPrimeraToma = "00:00";
+            horarioPrimeraToma = Constants.HORARIO_INVALIDO;
         }
 
         // Calcular intervalo entre tomas (24 horas / tomas diarias)
@@ -168,7 +169,7 @@ public class Medicamento {
             }
         } catch (Exception e) {
             // Si hay algún error al parsear, usar valor por defecto
-            horarioPrimeraToma = "00:00";
+            horarioPrimeraToma = Constants.HORARIO_INVALIDO;
             int horaInicial = 0;
             int minutoInicial = 0;
             for (int i = 0; i < tomasDiarias; i++) {

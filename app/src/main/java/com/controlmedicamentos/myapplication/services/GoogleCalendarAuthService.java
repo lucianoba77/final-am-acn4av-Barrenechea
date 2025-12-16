@@ -116,19 +116,19 @@ public class GoogleCalendarAuthService {
                                         } else {
                                             // No se pudo renovar, eliminar token
                                             Log.d(TAG, "No se pudo renovar el token, eliminando");
-                                            eliminarTokenGoogle(new FirestoreCallback() {
-                                                @Override
-                                                public void onSuccess(Object result) {
-                                                    if (callback != null) {
-                                                        callback.onSuccess(null);
-                                                    }
-                                                }
-                                                
-                                                @Override
-                                                public void onError(Exception exception) {
-                                                    if (callback != null) {
-                                                        callback.onSuccess(null);
-                                                    }
+                                eliminarTokenGoogle(new FirestoreCallback() {
+                                    @Override
+                                    public void onSuccess(Object result) {
+                                        if (callback != null) {
+                                            callback.onSuccess(null);
+                                        }
+                                    }
+                                    
+                                    @Override
+                                    public void onError(Exception exception) {
+                                        if (callback != null) {
+                                            callback.onSuccess(null);
+                                        }
                                                 }
                                             });
                                         }
@@ -363,27 +363,45 @@ public class GoogleCalendarAuthService {
     /**
      * Verifica si el usuario tiene Google Calendar conectado
      * Consistente con React: calendarService.js - tieneGoogleCalendarConectado()
+     * 
+     * IMPORTANTE: Este método NO elimina el token si hay un error.
+     * Solo verifica si existe un token válido en Firestore.
      */
     public void tieneGoogleCalendarConectado(FirestoreCallback callback) {
-        obtenerTokenGoogle(new FirestoreCallback() {
-            @Override
-            public void onSuccess(Object result) {
-                boolean conectado = result != null && 
-                    result instanceof Map && 
-                    ((Map<?, ?>) result).containsKey("access_token");
-                
-                if (callback != null) {
-                    callback.onSuccess(conectado);
-                }
+        FirebaseUser firebaseUser = authService.getCurrentUser();
+        if (firebaseUser == null) {
+            if (callback != null) {
+                callback.onSuccess(false);
             }
-            
-            @Override
-            public void onError(Exception exception) {
-                if (callback != null) {
-                    callback.onSuccess(false);
+            return;
+        }
+        
+        String userId = firebaseUser.getUid();
+        
+        // Verificar directamente en Firestore si existe un token
+        // sin intentar renovarlo (para evitar eliminarlo si está expirado)
+        db.collection(COLLECTION_GOOGLE_TOKENS)
+            .document(userId)
+            .get()
+            .addOnCompleteListener(task -> {
+                if (task.isSuccessful()) {
+                    DocumentSnapshot document = task.getResult();
+                    boolean conectado = document != null && 
+                                      document.exists() && 
+                                      document.getData() != null &&
+                                      document.getData().containsKey("access_token");
+                    
+                    if (callback != null) {
+                        callback.onSuccess(conectado);
+                    }
+                } else {
+                    // Error al verificar, pero no eliminar el token
+                    Log.w(TAG, "Error al verificar token de Google Calendar (no crítico)", task.getException());
+                    if (callback != null) {
+                        callback.onSuccess(false);
+                    }
                 }
-            }
-        });
+            });
     }
     
     /**

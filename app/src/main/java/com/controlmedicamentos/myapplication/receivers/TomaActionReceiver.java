@@ -76,7 +76,8 @@ public class TomaActionReceiver extends BroadcastReceiver {
                                     medicamento.pausarMedicamento();
                                 }
                                 
-                                firebaseService.actualizarMedicamento(medicamento, new FirebaseService.FirestoreCallback() {
+                                // Pasar contexto para gestionar Google Calendar si se pausa
+                                firebaseService.actualizarMedicamento(medicamento, context, new FirebaseService.FirestoreCallback() {
                                     @Override
                                     public void onSuccess(Object updateResult) {
                                         Log.d(TAG, "Toma registrada y medicamento actualizado");

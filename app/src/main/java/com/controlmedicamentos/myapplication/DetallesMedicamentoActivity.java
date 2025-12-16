@@ -397,7 +397,7 @@ public class DetallesMedicamentoActivity extends AppCompatActivity {
         // Forzar aplicación inmediata de insets
         ViewCompat.requestApplyInsets(headerLayout);
     }
-
+    
     /**
      * Crea un Intent para abrir esta Activity con un medicamento específico
      * @param context Contexto de la aplicación

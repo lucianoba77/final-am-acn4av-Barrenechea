@@ -11,6 +11,8 @@ import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.controlmedicamentos.myapplication.utils.ErrorHandler;
+import com.controlmedicamentos.myapplication.utils.Logger;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -510,7 +512,8 @@ public class AjustesActivity extends AppCompatActivity {
     private void eliminarCuenta(String email, String password) {
         // Verificar conexión a internet
         if (!com.controlmedicamentos.myapplication.utils.NetworkUtils.isNetworkAvailable(this)) {
-            Toast.makeText(this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+            ErrorHandler.handleErrorWithCustomMessage(this, null, "AjustesActivity", 
+                "No hay conexión a internet");
             return;
         }
         
@@ -580,11 +583,7 @@ public class AjustesActivity extends AppCompatActivity {
                                     @Override
                                     public void onError(Exception exception) {
                                         progressDialog.dismiss();
-                                        android.util.Log.e("AjustesActivity", "Error al eliminar usuario de Firestore", exception);
-                                        Toast.makeText(AjustesActivity.this, 
-                                            "Error al eliminar datos del usuario: " + 
-                                            (exception != null ? exception.getMessage() : "Error desconocido"), 
-                                            Toast.LENGTH_LONG).show();
+                                        ErrorHandler.handleError(AjustesActivity.this, exception, "AjustesActivity");
                                     }
                                 });
                             }
@@ -592,11 +591,7 @@ public class AjustesActivity extends AppCompatActivity {
                             @Override
                             public void onError(Exception exception) {
                                 progressDialog.dismiss();
-                                android.util.Log.e("AjustesActivity", "Error al eliminar tomas", exception);
-                                Toast.makeText(AjustesActivity.this, 
-                                    "Error al eliminar tomas: " + 
-                                    (exception != null ? exception.getMessage() : "Error desconocido"), 
-                                    Toast.LENGTH_LONG).show();
+                                ErrorHandler.handleError(AjustesActivity.this, exception, "AjustesActivity");
                             }
                         });
                     }
@@ -604,11 +599,7 @@ public class AjustesActivity extends AppCompatActivity {
                     @Override
                     public void onError(Exception exception) {
                         progressDialog.dismiss();
-                        android.util.Log.e("AjustesActivity", "Error al eliminar medicamentos", exception);
-                        Toast.makeText(AjustesActivity.this, 
-                            "Error al eliminar medicamentos: " + 
-                            (exception != null ? exception.getMessage() : "Error desconocido"), 
-                            Toast.LENGTH_LONG).show();
+                        ErrorHandler.handleError(AjustesActivity.this, exception, "AjustesActivity");
                     }
                 });
             }
@@ -616,17 +607,7 @@ public class AjustesActivity extends AppCompatActivity {
             @Override
             public void onError(Exception exception) {
                 progressDialog.dismiss();
-                android.util.Log.e("AjustesActivity", "Error al reautenticar usuario", exception);
-                String mensaje = "Error al verificar credenciales";
-                if (exception != null && exception.getMessage() != null) {
-                    if (exception.getMessage().contains("wrong-password") || 
-                        exception.getMessage().contains("invalid-credential")) {
-                        mensaje = "Credenciales incorrectas. Por favor verifica tu email y contraseña.";
-                    } else {
-                        mensaje = exception.getMessage();
-                    }
-                }
-                Toast.makeText(AjustesActivity.this, mensaje, Toast.LENGTH_LONG).show();
+                ErrorHandler.handleError(AjustesActivity.this, exception, "AjustesActivity");
             }
         });
     }
@@ -661,7 +642,7 @@ public class AjustesActivity extends AppCompatActivity {
                     } else {
                         // Si falla, puede ser porque el usuario solo tiene Google
                         // En ese caso, intentamos continuar de todas formas
-                        android.util.Log.w("AjustesActivity", 
+                        Logger.w("AjustesActivity", 
                             "No se pudo reautenticar con email/password, pero continuamos");
                         if (callback != null) {
                             callback.onSuccess(user);
@@ -692,7 +673,8 @@ public class AjustesActivity extends AppCompatActivity {
         com.google.firebase.auth.FirebaseUser user = authService.getCurrentUser();
         if (user == null) {
             progressDialog.dismiss();
-            Toast.makeText(this, "Error: Usuario no encontrado", Toast.LENGTH_LONG).show();
+            ErrorHandler.handleErrorWithCustomMessage(this, null, "AjustesActivity", 
+                "Error: Usuario no encontrado");
             return;
         }
         
@@ -714,12 +696,7 @@ public class AjustesActivity extends AppCompatActivity {
                     startActivity(intent);
                     finish();
                 } else {
-                    android.util.Log.e("AjustesActivity", "Error al eliminar usuario de Firebase Auth", 
-                        task.getException());
-                    Toast.makeText(AjustesActivity.this, 
-                        "Error al eliminar cuenta: " + 
-                        (task.getException() != null ? task.getException().getMessage() : "Error desconocido"), 
-                        Toast.LENGTH_LONG).show();
+                    ErrorHandler.handleError(AjustesActivity.this, task.getException(), "AjustesActivity");
                 }
             });
     }
@@ -997,7 +974,7 @@ public class AjustesActivity extends AppCompatActivity {
         // Forzar aplicación inmediata de insets
         ViewCompat.requestApplyInsets(headerLayout);
     }
-
+    
     @Override
     protected void onResume() {
         super.onResume();

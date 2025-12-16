@@ -50,7 +50,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_medicamento"
+                    android:src="@drawable/ic_medicamento"
                         android:contentDescription="@string/medicine_icon"
                         android:tint="@color/primary" />
                 </FrameLayout>

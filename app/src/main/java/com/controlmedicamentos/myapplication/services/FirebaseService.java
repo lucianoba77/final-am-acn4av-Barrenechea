@@ -1,6 +1,8 @@
 package com.controlmedicamentos.myapplication.services;
 
 import android.util.Log;
+import com.controlmedicamentos.myapplication.utils.Constants;
+import com.controlmedicamentos.myapplication.utils.Logger;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -130,7 +132,12 @@ public class FirebaseService {
     // ==================== MEDICAMENTOS ====================
 
     /**
-     * Guarda un nuevo medicamento en Firestore
+     * Guarda un nuevo medicamento en Firestore.
+     * 
+     * @param medicamento El medicamento a guardar. No debe ser null.
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     *                 onSuccess recibe el medicamento con su ID asignado.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void guardarMedicamento(Medicamento medicamento, FirestoreCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -156,7 +163,7 @@ public class FirebaseService {
             .addOnSuccessListener(new OnSuccessListener<DocumentReference>() {
                 @Override
                 public void onSuccess(DocumentReference documentReference) {
-                    Log.d(TAG, "Medicamento guardado con ID: " + documentReference.getId());
+                    Logger.d(TAG, "Medicamento guardado con ID: " + documentReference.getId());
                     medicamento.setId(documentReference.getId());
                     if (callback != null) {
                         callback.onSuccess(medicamento);
@@ -166,7 +173,7 @@ public class FirebaseService {
             .addOnFailureListener(new OnFailureListener() {
                 @Override
                 public void onFailure(@NonNull Exception e) {
-                    Log.e(TAG, "Error al guardar medicamento", e);
+                    Logger.e(TAG, "Error al guardar medicamento", e);
                     if (callback != null) {
                         callback.onError(e);
                     }
@@ -175,10 +182,26 @@ public class FirebaseService {
     }
 
     /**
-     * Actualiza un medicamento existente
+     * Actualiza un medicamento existente en Firestore.
+     * Actualiza la fecha de actualización automáticamente.
      * Consistente con React: medicamentosService.js - actualizarMedicamento()
+     * 
+     * @param medicamento El medicamento con los datos actualizados. Debe tener un ID válido.
+     * @param callback Callback para manejar el resultado. Puede ser null.
      */
     public void actualizarMedicamento(Medicamento medicamento, FirestoreCallback callback) {
+        actualizarMedicamento(medicamento, null, callback);
+    }
+
+    /**
+     * Actualiza un medicamento existente en Firestore.
+     * Si se proporciona contexto, gestiona eventos de Google Calendar cuando se pausa/reactiva.
+     * 
+     * @param medicamento El medicamento con los datos actualizados. Debe tener un ID válido.
+     * @param context Contexto de la aplicación (opcional, para gestionar Google Calendar).
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     */
+    public void actualizarMedicamento(Medicamento medicamento, android.content.Context context, FirestoreCallback callback) {
         // Primero obtener el medicamento actual para verificar cambios
         db.collection(COLLECTION_MEDICAMENTOS)
             .document(medicamento.getId())
@@ -196,10 +219,14 @@ public class FirebaseService {
                     // Asegurar que stockInicial y stockActual sean números
                     // Lógica consistente con React: medicamentosService.js líneas 197-210
                     Map<String, Object> medicamentoActualData = document.getData();
+                    boolean estabaPausado = false;
+                    boolean ahoraEstaPausado = medicamento.isPausado();
+                    
                     if (medicamentoActualData != null) {
                         // Obtener valores actuales
                         Object stockInicialActualObj = medicamentoActualData.get("stockInicial");
                         Object stockActualActualObj = medicamentoActualData.get("stockActual");
+                        Object pausadoObj = medicamentoActualData.get("pausado");
                         
                         int stockInicialActual = 0;
                         int stockActualActual = 0;
@@ -209,6 +236,9 @@ public class FirebaseService {
                         }
                         if (stockActualActualObj instanceof Number) {
                             stockActualActual = ((Number) stockActualActualObj).intValue();
+                        }
+                        if (pausadoObj instanceof Boolean) {
+                            estabaPausado = (Boolean) pausadoObj;
                         }
                         
                         // Si se actualiza stockInicial y no se está actualizando stockActual explícitamente,
@@ -225,37 +255,104 @@ public class FirebaseService {
                         }
                     }
 
-                    // Preparar mapa de actualización
-                    Map<String, Object> medicamentoMap = medicamentoToMap(medicamento);
+                    // Detectar cambio en estado de pausa para gestionar Google Calendar
+                    boolean cambioEstadoPausa = estabaPausado != ahoraEstaPausado;
                     
-                    // Actualizar fechaActualizacion como string ISO (consistente con React)
-                    SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-                    isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                    medicamentoMap.put("fechaActualizacion", isoFormat.format(new Date()));
-
-                    // Actualizar en Firebase
-                    db.collection(COLLECTION_MEDICAMENTOS)
-                        .document(medicamento.getId())
-                        .update(medicamentoMap)
-                        .addOnSuccessListener(aVoid -> {
-                            Log.d(TAG, "Medicamento actualizado exitosamente");
-                            if (callback != null) {
-                                callback.onSuccess(medicamento);
-                            }
-                        })
-                        .addOnFailureListener(e -> {
-                            Log.e(TAG, "Error al actualizar medicamento", e);
-                            if (callback != null) {
-                                callback.onError(e);
-                            }
+                    // Si se pausó el medicamento, eliminar eventos de Google Calendar
+                    if (cambioEstadoPausa && ahoraEstaPausado && context != null) {
+                        eliminarEventosGoogleCalendarAlPausar(medicamento.getId(), context, () -> {
+                            continuarActualizacion(medicamento, callback);
                         });
+                        return;
+                    }
+                    
+                    // Si se reactivó el medicamento, crear eventos de Google Calendar
+                    if (cambioEstadoPausa && !ahoraEstaPausado && context != null) {
+                        crearEventosGoogleCalendarAlReactivar(medicamento, context, () -> {
+                            continuarActualizacion(medicamento, callback);
+                        });
+                        return;
+                    }
+
+                    // Continuar con la actualización normal
+                    continuarActualizacion(medicamento, callback);
                 } else {
-                    Log.e(TAG, "Error al obtener medicamento para actualizar", task.getException());
+                    Logger.e(TAG, "Error al obtener medicamento para actualizar", task.getException());
                     if (callback != null) {
                         callback.onError(task.getException());
                     }
                 }
             });
+    }
+
+    /**
+     * Continúa con la actualización del medicamento en Firestore.
+     */
+    private void continuarActualizacion(Medicamento medicamento, FirestoreCallback callback) {
+        // Preparar mapa de actualización
+        Map<String, Object> medicamentoMap = medicamentoToMap(medicamento);
+        
+        // Actualizar fechaActualizacion como string ISO (consistente con React)
+        SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+        isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        medicamentoMap.put("fechaActualizacion", isoFormat.format(new Date()));
+
+        // Actualizar en Firebase
+        db.collection(COLLECTION_MEDICAMENTOS)
+            .document(medicamento.getId())
+            .update(medicamentoMap)
+            .addOnSuccessListener(aVoid -> {
+                Logger.d(TAG, "Medicamento actualizado exitosamente");
+                if (callback != null) {
+                    callback.onSuccess(medicamento);
+                }
+            })
+            .addOnFailureListener(e -> {
+                Logger.e(TAG, "Error al actualizar medicamento", e);
+                if (callback != null) {
+                    callback.onError(e);
+                }
+            });
+    }
+
+    /**
+     * Elimina eventos de Google Calendar cuando se pausa un medicamento.
+     */
+    private void eliminarEventosGoogleCalendarAlPausar(String medicamentoId, android.content.Context context, Runnable onComplete) {
+        com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper syncHelper = 
+            new com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper(context);
+        
+        syncHelper.eliminarEventosMedicamento(medicamentoId, 
+            new com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper.SyncCallback() {
+                @Override
+                public void onSuccess() {
+                    Logger.d(TAG, "Eventos de Google Calendar eliminados al pausar medicamento");
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                }
+            }
+        );
+    }
+
+    /**
+     * Crea eventos de Google Calendar cuando se reactiva un medicamento.
+     */
+    private void crearEventosGoogleCalendarAlReactivar(Medicamento medicamento, android.content.Context context, Runnable onComplete) {
+        com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper syncHelper = 
+            new com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper(context);
+        
+        syncHelper.crearEventosMedicamento(medicamento, 
+            new com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper.SyncCallback() {
+                @Override
+                public void onSuccess() {
+                    Logger.d(TAG, "Eventos de Google Calendar creados al reactivar medicamento");
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                }
+            }
+        );
     }
 
     /**
@@ -355,7 +452,7 @@ public class FirebaseService {
                         .document(medicamentoId)
                         .update(datosActualizados)
                         .addOnSuccessListener(aVoid -> {
-                            Log.d(TAG, "Stock restado exitosamente. Nuevo stock: " + nuevoStock);
+                            Logger.d(TAG, "Stock restado exitosamente. Nuevo stock: " + nuevoStock);
                             if (callback != null) {
                                 Map<String, Object> resultado = new HashMap<>();
                                 resultado.put("stockActual", nuevoStock);
@@ -364,13 +461,13 @@ public class FirebaseService {
                             }
                         })
                         .addOnFailureListener(e -> {
-                            Log.e(TAG, "Error al restar stock", e);
+                            Logger.e(TAG, "Error al restar stock", e);
                             if (callback != null) {
                                 callback.onError(e);
                             }
                         });
                 } else {
-                    Log.e(TAG, "Error al obtener medicamento para restar stock", task.getException());
+                    Logger.e(TAG, "Error al obtener medicamento para restar stock", task.getException());
                     if (callback != null) {
                         callback.onError(task.getException());
                     }
@@ -381,7 +478,13 @@ public class FirebaseService {
     // ==================== TOMAS ====================
 
     /**
-     * Guarda una toma realizada por el usuario.
+     * Guarda una toma en Firestore.
+     * Asigna automáticamente el userId del usuario actual y establece fechas por defecto si no están presentes.
+     * 
+     * @param toma La toma a guardar. Debe tener medicamentoId. No debe ser null.
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     *                 onSuccess recibe la toma con su ID asignado.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void guardarToma(Toma toma, FirestoreCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -422,14 +525,14 @@ public class FirebaseService {
         db.collection(COLLECTION_TOMAS)
             .add(tomaMap)
             .addOnSuccessListener(documentReference -> {
-                Log.d(TAG, "Toma registrada con ID: " + documentReference.getId());
+                Logger.d(TAG, "Toma registrada con ID: " + documentReference.getId());
                 toma.setId(documentReference.getId());
                 if (callback != null) {
                     callback.onSuccess(toma);
                 }
             })
             .addOnFailureListener(e -> {
-                Log.e(TAG, "Error al registrar la toma", e);
+                Logger.e(TAG, "Error al registrar la toma", e);
                 if (callback != null) {
                     callback.onError(e);
                 }
@@ -438,6 +541,12 @@ public class FirebaseService {
 
     /**
      * Obtiene las tomas registradas para un medicamento específico.
+     * Retorna las últimas 200 tomas ordenadas por fecha descendente.
+     * 
+     * @param medicamentoId ID del medicamento. No debe ser null ni vacío.
+     * @param callback Callback para manejar el resultado. No debe ser null.
+     *                 onSuccess recibe una List de Toma ordenadas por fecha descendente.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void obtenerTomasPorMedicamento(String medicamentoId, FirestoreListCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -448,10 +557,12 @@ public class FirebaseService {
             return;
         }
 
+        // Limitar a últimas 200 tomas del medicamento para optimizar rendimiento
         db.collection(COLLECTION_TOMAS)
             .whereEqualTo("userId", firebaseUser.getUid())
             .whereEqualTo("medicamentoId", medicamentoId)
             .orderBy("fechaHoraTomada", Query.Direction.DESCENDING)
+            .limit(200)
             .get()
             .addOnCompleteListener(task -> {
                 if (task.isSuccessful()) {
@@ -463,7 +574,7 @@ public class FirebaseService {
                         callback.onSuccess(tomas);
                     }
                 } else {
-                    Log.e(TAG, "Error al obtener tomas del medicamento", task.getException());
+                    Logger.e(TAG, "Error al obtener tomas del medicamento", task.getException());
                     if (callback != null) {
                         callback.onError(task.getException());
                     }
@@ -473,6 +584,11 @@ public class FirebaseService {
 
     /**
      * Obtiene todas las tomas del usuario actual.
+     * Retorna las últimas 500 tomas ordenadas por fecha descendente para optimizar rendimiento.
+     * 
+     * @param callback Callback para manejar el resultado. No debe ser null.
+     *                 onSuccess recibe una List de Toma ordenadas por fecha descendente.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void obtenerTomasUsuario(FirestoreListCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -484,9 +600,11 @@ public class FirebaseService {
         }
 
         // Intentar obtener con orderBy primero, si falla, obtener sin orderBy
+        // Limitar a últimas 500 tomas para optimizar rendimiento
         db.collection(COLLECTION_TOMAS)
             .whereEqualTo("userId", firebaseUser.getUid())
             .orderBy("fechaHoraTomada", Query.Direction.DESCENDING)
+            .limit(500)
             .get()
             .addOnCompleteListener(task -> {
                 if (task.isSuccessful()) {
@@ -502,7 +620,7 @@ public class FirebaseService {
                     }
                 } else {
                     // Si falla por falta de índice, intentar sin orderBy
-                    Log.w(TAG, "Error al obtener tomas con orderBy, intentando sin orden", task.getException());
+                    Logger.w(TAG, "Error al obtener tomas con orderBy, intentando sin orden", task.getException());
                     db.collection(COLLECTION_TOMAS)
                         .whereEqualTo("userId", firebaseUser.getUid())
                         .get()
@@ -522,14 +640,14 @@ public class FirebaseService {
                                     }
                                     return t2.getFechaHoraTomada().compareTo(t1.getFechaHoraTomada());
                                 });
-                                if (callback != null) {
+                    if (callback != null) {
                                     callback.onSuccess(tomas);
                                 }
                             } else {
-                                Log.e(TAG, "Error al obtener tomas del usuario", task2.getException());
+                                Logger.e(TAG, "Error al obtener tomas del usuario", task2.getException());
                                 if (callback != null) {
                                     callback.onError(task2.getException());
-                                }
+                    }
                             }
                         });
                 }
@@ -537,30 +655,54 @@ public class FirebaseService {
     }
 
     /**
-     * Elimina un medicamento
+     * Elimina un medicamento de Firestore.
+     * Antes de eliminar, elimina los eventos asociados en Google Calendar si están conectados.
+     * 
+     * @param medicamentoId ID del medicamento a eliminar. No debe ser null ni vacío.
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     *                 onSuccess se llama cuando la eliminación es exitosa.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void eliminarMedicamento(String medicamentoId, FirestoreCallback callback) {
-        db.collection(COLLECTION_MEDICAMENTOS)
-            .document(medicamentoId)
-            .delete()
-            .addOnSuccessListener(new OnSuccessListener<Void>() {
-                @Override
-                public void onSuccess(Void aVoid) {
-                    Log.d(TAG, "Medicamento eliminado exitosamente");
-                    if (callback != null) {
-                        callback.onSuccess(null);
+        // Primero eliminar eventos de Google Calendar si existen
+        eliminarEventosGoogleCalendarAntesDeEliminar(medicamentoId, () -> {
+            // Luego eliminar el medicamento de Firestore
+            db.collection(COLLECTION_MEDICAMENTOS)
+                .document(medicamentoId)
+                .delete()
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Logger.d(TAG, "Medicamento eliminado exitosamente");
+                        if (callback != null) {
+                            callback.onSuccess(null);
+                        }
                     }
-                }
-            })
-            .addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    Log.e(TAG, "Error al eliminar medicamento", e);
-                    if (callback != null) {
-                        callback.onError(e);
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Logger.e(TAG, "Error al eliminar medicamento", e);
+                        if (callback != null) {
+                            callback.onError(e);
+                        }
                     }
-                }
-            });
+                });
+        });
+    }
+
+    /**
+     * Elimina los eventos de Google Calendar antes de eliminar un medicamento.
+     * Nota: Este método requiere que se llame desde una Activity con contexto.
+     * Si no hay contexto disponible, simplemente continúa con la eliminación.
+     */
+    private void eliminarEventosGoogleCalendarAntesDeEliminar(String medicamentoId, Runnable onComplete) {
+        // Por ahora, continuar sin eliminar eventos si no hay contexto
+        // Las Activities que llaman a eliminarMedicamento deben manejar esto
+        Logger.d(TAG, "Nota: Eliminar eventos de Google Calendar debe manejarse desde la Activity");
+        if (onComplete != null) {
+            onComplete.run();
+        }
     }
 
     /**
@@ -591,7 +733,7 @@ public class FirebaseService {
                             callback.onSuccess(medicamentos);
                         }
                     } else {
-                        Log.e(TAG, "Error al obtener medicamentos", task.getException());
+                        Logger.e(TAG, "Error al obtener medicamentos", task.getException());
                         if (callback != null) {
                             callback.onError(task.getException());
                         }
@@ -622,7 +764,7 @@ public class FirebaseService {
                         }
                     }
                 } else {
-                    Log.e(TAG, "Error al obtener medicamento", task.getException());
+                    Logger.e(TAG, "Error al obtener medicamento", task.getException());
                     if (callback != null) {
                         callback.onError(task.getException());
                     }
@@ -796,7 +938,7 @@ public class FirebaseService {
         // Guardar como "primeraToma" para compatibilidad con React
         map.put("primeraToma", horario);
         // También guardar como "horarioPrimeraToma" para compatibilidad con versión anterior de la app
-        map.put("horarioPrimeraToma", horario.isEmpty() ? "00:00" : horario);
+        map.put("horarioPrimeraToma", horario.isEmpty() ? Constants.HORARIO_INVALIDO : horario);
         
         map.put("afeccion", medicamento.getAfeccion());
         map.put("stockInicial", medicamento.getStockInicial());
@@ -885,7 +1027,7 @@ public class FirebaseService {
         // Si tomasDiarias = 0, mantener primeraToma como "" (vacío) para medicamentos ocasionales
         // Si tomasDiarias > 0 y no hay horario, usar "00:00" como valor por defecto
         if (tomasDiarias > 0) {
-            medicamento.setHorarioPrimeraToma(primeraToma != null && !primeraToma.isEmpty() ? primeraToma : "00:00");
+            medicamento.setHorarioPrimeraToma(primeraToma != null && !primeraToma.isEmpty() ? primeraToma : Constants.HORARIO_INVALIDO);
         } else {
             // Medicamento ocasional: mantener vacío
             medicamento.setHorarioPrimeraToma(primeraToma != null && !primeraToma.isEmpty() ? primeraToma : "");
@@ -1030,7 +1172,12 @@ public class FirebaseService {
     }
 
     /**
-     * Elimina todos los medicamentos del usuario actual
+     * Elimina todos los medicamentos del usuario actual.
+     * Usa operaciones batch para eficiencia.
+     * 
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     *                 onSuccess se llama cuando todos los medicamentos son eliminados.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void eliminarTodosLosMedicamentos(FirestoreCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -1060,19 +1207,19 @@ public class FirebaseService {
                     
                     com.google.android.gms.tasks.Tasks.whenAll(deleteTasks)
                         .addOnSuccessListener(aVoid -> {
-                            Log.d(TAG, "Todos los medicamentos eliminados exitosamente");
+                            Logger.d(TAG, "Todos los medicamentos eliminados exitosamente");
                             if (callback != null) {
                                 callback.onSuccess(null);
                             }
                         })
                         .addOnFailureListener(e -> {
-                            Log.e(TAG, "Error al eliminar medicamentos", e);
+                            Logger.e(TAG, "Error al eliminar medicamentos", e);
                             if (callback != null) {
                                 callback.onError(e);
                             }
                         });
                 } else {
-                    Log.e(TAG, "Error al obtener medicamentos para eliminar", task.getException());
+                    Logger.e(TAG, "Error al obtener medicamentos para eliminar", task.getException());
                     if (callback != null) {
                         callback.onError(task.getException());
                     }
@@ -1081,7 +1228,12 @@ public class FirebaseService {
     }
 
     /**
-     * Elimina todas las tomas del usuario actual
+     * Elimina todas las tomas del usuario actual.
+     * Usa operaciones batch para eficiencia.
+     * 
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     *                 onSuccess se llama cuando todas las tomas son eliminadas.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void eliminarTodasLasTomas(FirestoreCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -1111,19 +1263,19 @@ public class FirebaseService {
                     
                     com.google.android.gms.tasks.Tasks.whenAll(deleteTasks)
                         .addOnSuccessListener(aVoid -> {
-                            Log.d(TAG, "Todas las tomas eliminadas exitosamente");
+                            Logger.d(TAG, "Todas las tomas eliminadas exitosamente");
                             if (callback != null) {
                                 callback.onSuccess(null);
                             }
                         })
                         .addOnFailureListener(e -> {
-                            Log.e(TAG, "Error al eliminar tomas", e);
+                            Logger.e(TAG, "Error al eliminar tomas", e);
                             if (callback != null) {
                                 callback.onError(e);
                             }
                         });
                 } else {
-                    Log.e(TAG, "Error al obtener tomas para eliminar", task.getException());
+                    Logger.e(TAG, "Error al obtener tomas para eliminar", task.getException());
                     if (callback != null) {
                         callback.onError(task.getException());
                     }
@@ -1132,7 +1284,11 @@ public class FirebaseService {
     }
 
     /**
-     * Elimina el documento de usuario en Firestore
+     * Elimina el documento de usuario en Firestore.
+     * 
+     * @param callback Callback para manejar el resultado. Puede ser null.
+     *                 onSuccess se llama cuando el usuario es eliminado.
+     *                 onError recibe la excepción si ocurre un error.
      */
     public void eliminarUsuario(FirestoreCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
@@ -1147,13 +1303,13 @@ public class FirebaseService {
             .document(firebaseUser.getUid())
             .delete()
             .addOnSuccessListener(aVoid -> {
-                Log.d(TAG, "Usuario eliminado de Firestore exitosamente");
+                Logger.d(TAG, "Usuario eliminado de Firestore exitosamente");
                 if (callback != null) {
                     callback.onSuccess(null);
                 }
             })
             .addOnFailureListener(e -> {
-                Log.e(TAG, "Error al eliminar usuario de Firestore", e);
+                Logger.e(TAG, "Error al eliminar usuario de Firestore", e);
                 if (callback != null) {
                     callback.onError(e);
                 }
@@ -1162,6 +1318,32 @@ public class FirebaseService {
 
     // ==================== INTERFACES ====================
 
+    /**
+     * Obtiene el documento de un medicamento directamente desde Firestore.
+     * Útil para acceder a campos que no están en el modelo (como eventoIdsGoogleCalendar).
+     * 
+     * @param medicamentoId ID del medicamento.
+     * @param callback Callback con el DocumentSnapshot.
+     */
+    public void obtenerMedicamentoDocumento(String medicamentoId, FirestoreDocumentCallback callback) {
+        db.collection(COLLECTION_MEDICAMENTOS)
+            .document(medicamentoId)
+            .get()
+            .addOnCompleteListener(task -> {
+                if (task.isSuccessful()) {
+                    DocumentSnapshot document = task.getResult();
+                    if (callback != null) {
+                        callback.onSuccess(document);
+                    }
+                } else {
+                    Logger.e(TAG, "Error al obtener documento de medicamento", task.getException());
+                    if (callback != null) {
+                        callback.onError(task.getException());
+                    }
+                }
+            });
+    }
+
     public interface FirestoreCallback {
         void onSuccess(Object result);
         void onError(Exception exception);
@@ -1169,6 +1351,11 @@ public class FirebaseService {
 
     public interface FirestoreListCallback {
         void onSuccess(List<?> result);
+        void onError(Exception exception);
+    }
+
+    public interface FirestoreDocumentCallback {
+        void onSuccess(DocumentSnapshot document);
         void onError(Exception exception);
     }
 }

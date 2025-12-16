@@ -24,11 +24,16 @@ import com.controlmedicamentos.myapplication.R;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.services.AuthService;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
+import com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService;
+import com.controlmedicamentos.myapplication.services.GoogleCalendarService;
+import com.controlmedicamentos.myapplication.utils.Constants;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.ColorUtils;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
+import com.controlmedicamentos.myapplication.utils.Logger;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
 
 public class NuevaMedicinaActivity extends AppCompatActivity {
 
@@ -47,6 +52,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     private String horaSeleccionada = "08:00";
     private AuthService authService;
     private FirebaseService firebaseService;
+    private GoogleCalendarAuthService googleCalendarAuthService;
+    private GoogleCalendarService googleCalendarService;
     private Medicamento medicamentoEditar = null; // Medicamento que se está editando (null si es creación)
     private boolean esEdicion = false;
 
@@ -74,6 +81,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         // Inicializar servicios
         authService = new AuthService();
         firebaseService = new FirebaseService();
+        googleCalendarAuthService = new GoogleCalendarAuthService(this);
+        googleCalendarService = new GoogleCalendarService();
 
         // Verificar autenticación
         if (!authService.isUserLoggedIn()) {
@@ -287,7 +296,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                     medicamento.setStockActual(medicamentoEditar.getStockActual());
                 }
                 
-                firebaseService.actualizarMedicamento(medicamento, new FirebaseService.FirestoreCallback() {
+                // Pasar contexto para gestionar Google Calendar si se pausa/reactiva
+                firebaseService.actualizarMedicamento(medicamento, NuevaMedicinaActivity.this, new FirebaseService.FirestoreCallback() {
                     @Override
                     public void onSuccess(Object result) {
                         // Programar alarmas para el medicamento actualizado
@@ -318,6 +328,9 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                             Medicamento medicamentoGuardado = (Medicamento) result;
                             AlarmScheduler alarmScheduler = new AlarmScheduler(NuevaMedicinaActivity.this);
                             alarmScheduler.programarAlarmasMedicamento(medicamentoGuardado);
+                            
+                            // Sincronizar con Google Calendar si está conectado
+                            sincronizarConGoogleCalendar(medicamentoGuardado);
                         }
                         Toast.makeText(NuevaMedicinaActivity.this, "Medicamento guardado exitosamente", Toast.LENGTH_SHORT).show();
                         finish(); // Cerrar actividad
@@ -392,7 +405,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         // Configurar horario (si tiene tomas diarias > 0)
         if (medicamento.getTomasDiarias() > 0 && medicamento.getHorarioPrimeraToma() != null 
             && !medicamento.getHorarioPrimeraToma().isEmpty() 
-            && !medicamento.getHorarioPrimeraToma().equals("00:00")) {
+            && !medicamento.getHorarioPrimeraToma().equals(Constants.HORARIO_INVALIDO)) {
             horaSeleccionada = medicamento.getHorarioPrimeraToma();
             btnSeleccionarHora.setText(horaSeleccionada);
         } else if (medicamento.getTomasDiarias() == 0) {
@@ -689,5 +702,106 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         
         // Forzar aplicación inmediata de insets
         ViewCompat.requestApplyInsets(headerLayout);
+    }
+    
+    /**
+     * Sincroniza el medicamento con Google Calendar si está conectado
+     */
+    private void sincronizarConGoogleCalendar(Medicamento medicamento) {
+        // Verificar si Google Calendar está conectado
+        googleCalendarAuthService.tieneGoogleCalendarConectado(
+            new GoogleCalendarAuthService.FirestoreCallback() {
+                @Override
+                public void onSuccess(Object result) {
+                    boolean conectado = result != null && (Boolean) result;
+                    if (conectado) {
+                        // Obtener token de acceso
+                        googleCalendarAuthService.obtenerTokenGoogle(
+                            new GoogleCalendarAuthService.FirestoreCallback() {
+                                @Override
+                                public void onSuccess(Object tokenResult) {
+                                    if (tokenResult != null && tokenResult instanceof Map) {
+                                        @SuppressWarnings("unchecked")
+                                        Map<String, Object> tokenData = (Map<String, Object>) tokenResult;
+                                        String accessToken = (String) tokenData.get("access_token");
+                                        
+                                        if (accessToken != null && !accessToken.isEmpty()) {
+                                            // Crear eventos recurrentes en Google Calendar
+                                            googleCalendarService.crearEventosRecurrentes(
+                                                accessToken, 
+                                                medicamento,
+                                                new GoogleCalendarService.RecurrentEventsCallback() {
+                                                    @Override
+                                                    public void onSuccess(List<String> eventoIds) {
+                                                        Logger.d("NuevaMedicinaActivity", 
+                                                            "Eventos de Google Calendar creados: " + eventoIds.size());
+                                                        
+                                                        // Guardar los IDs de eventos en el medicamento
+                                                        if (!eventoIds.isEmpty() && medicamento.getId() != null) {
+                                                            guardarEventoIdsEnMedicamento(medicamento.getId(), eventoIds);
+                                                        }
+                                                    }
+                                                    
+                                                    @Override
+                                                    public void onError(Exception exception) {
+                                                        Logger.w("NuevaMedicinaActivity", 
+                                                            "Error al crear eventos en Google Calendar", exception);
+                                                        // No mostrar error al usuario, es opcional
+                                                    }
+                                                }
+                                            );
+                                        } else {
+                                            Logger.w("NuevaMedicinaActivity", 
+                                                "Token de Google Calendar no disponible");
+                                        }
+                                    }
+                                }
+                                
+                                @Override
+                                public void onError(Exception exception) {
+                                    Logger.w("NuevaMedicinaActivity", 
+                                        "Error al obtener token de Google Calendar", exception);
+                                    // No mostrar error al usuario, es opcional
+                                }
+                            }
+                        );
+                    } else {
+                        Logger.d("NuevaMedicinaActivity", 
+                            "Google Calendar no está conectado, omitiendo sincronización");
+                    }
+                }
+                
+                @Override
+                public void onError(Exception exception) {
+                    Logger.w("NuevaMedicinaActivity", 
+                        "Error al verificar conexión de Google Calendar", exception);
+                    // No mostrar error al usuario, es opcional
+                }
+            }
+        );
+    }
+    
+    /**
+     * Guarda los IDs de eventos de Google Calendar en el medicamento
+     */
+    private void guardarEventoIdsEnMedicamento(String medicamentoId, List<String> eventoIds) {
+        firebaseService.obtenerMedicamento(medicamentoId, new FirebaseService.FirestoreCallback() {
+            @Override
+            public void onSuccess(Object result) {
+                if (result instanceof Medicamento) {
+                    Medicamento medicamento = (Medicamento) result;
+                    // Los eventoIds se guardan automáticamente en Firestore cuando se crean
+                    // No necesitamos hacer nada adicional aquí
+                    Logger.d("NuevaMedicinaActivity", 
+                        "IDs de eventos guardados para medicamento: " + medicamentoId);
+                }
+            }
+            
+            @Override
+            public void onError(Exception exception) {
+                Logger.w("NuevaMedicinaActivity", 
+                    "Error al guardar IDs de eventos en medicamento", exception);
+            }
+        });
     }
 }

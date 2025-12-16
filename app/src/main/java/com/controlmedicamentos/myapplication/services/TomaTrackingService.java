@@ -6,6 +6,7 @@ import android.util.Log;
 
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
+import com.controlmedicamentos.myapplication.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -19,8 +20,6 @@ import java.util.Map;
  */
 public class TomaTrackingService {
     private static final String TAG = "TomaTrackingService";
-    private static final String PREF_TOMAS_PROGRAMADAS = "tomas_programadas";
-    private static final String PREF_POSPOSICIONES = "posposiciones";
     
     private Context context;
     private SharedPreferences preferences;
@@ -28,14 +27,17 @@ public class TomaTrackingService {
     
     public TomaTrackingService(Context context) {
         this.context = context;
-        this.preferences = context.getSharedPreferences("ControlMedicamentos", Context.MODE_PRIVATE);
+        this.preferences = context.getSharedPreferences(Constants.PREF_NAME, Context.MODE_PRIVATE);
         this.tomasPorMedicamento = new HashMap<>();
         cargarTomasProgramadas();
     }
     
     /**
-     * Inicializa las tomas programadas para un medicamento en el día actual
-     * Siempre limpia las tomas del día anterior y genera nuevas para el día actual
+     * Inicializa las tomas programadas para un medicamento en el día actual.
+     * Siempre limpia las tomas del día anterior y genera nuevas para el día actual.
+     * 
+     * @param medicamento El medicamento para el cual inicializar las tomas. No debe ser null.
+     *                    Si el medicamento no tiene horarios válidos, no se crearán tomas.
      */
     public void inicializarTomasDia(Medicamento medicamento) {
         if (medicamento == null || medicamento.getId() == null) {
@@ -159,7 +161,11 @@ public class TomaTrackingService {
     }
     
     /**
-     * Verifica si una fecha es del día actual
+     * Verifica si una fecha corresponde al día actual.
+     * 
+     * @param fechaToma La fecha de la toma a verificar.
+     * @param ahora La fecha/hora actual para comparar.
+     * @return true si la fecha corresponde al día actual, false en caso contrario.
      */
     private boolean esTomaDelDia(Calendar fechaToma, Calendar ahora) {
         return fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
@@ -167,7 +173,11 @@ public class TomaTrackingService {
     }
     
     /**
-     * Obtiene el estado actual de una toma específica
+     * Obtiene el estado actual de una toma específica.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @param horario El horario de la toma en formato "HH:mm".
+     * @return El estado actual de la toma, o PENDIENTE si no se encuentra.
      */
     public TomaProgramada.EstadoTomaProgramada obtenerEstadoToma(
             String medicamentoId, String horario) {
@@ -187,7 +197,11 @@ public class TomaTrackingService {
     }
     
     /**
-     * Obtiene todas las tomas programadas de un medicamento
+     * Obtiene todas las tomas programadas de un medicamento.
+     * Los estados de las tomas se actualizan automáticamente antes de retornarlas.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @return Lista de tomas programadas del medicamento. Retorna lista vacía si no hay tomas.
      */
     public List<TomaProgramada> obtenerTomasMedicamento(String medicamentoId) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -204,7 +218,10 @@ public class TomaTrackingService {
     }
     
     /**
-     * Actualiza el estado de una toma según el tiempo actual
+     * Actualiza el estado de una toma según el tiempo actual.
+     * Los estados posibles son: PENDIENTE, ALERTA_AMARILLA, ALERTA_ROJA, RETRASO, OMITIDA.
+     * 
+     * @param toma La toma cuyo estado se actualizará. No debe ser null.
      */
     private void actualizarEstadoToma(TomaProgramada toma) {
         if (toma == null || toma.isTomada()) {
@@ -302,7 +319,7 @@ public class TomaTrackingService {
             
             // Permitir marcar hasta 10 minutos antes (ventana de alerta amarilla)
             Calendar fechaLimiteAntes = (Calendar) fechaToma.clone();
-            fechaLimiteAntes.add(Calendar.MINUTE, -10);
+            fechaLimiteAntes.add(Calendar.MINUTE, -Constants.MINUTOS_ALERTA_AMARILLA);
             
             if (ahora.before(fechaLimiteAntes)) {
                 return "No se puede marcar como tomado antes de la hora programada. La toma está programada para " + 
@@ -319,8 +336,8 @@ public class TomaTrackingService {
                 // Cada posposición agrega 10 minutos, máximo 3 = 30 minutos
                 // El límite es 1 hora desde la hora original + tiempo de posposiciones
                 fechaLimiteDespues = (Calendar) fechaToma.clone();
-                fechaLimiteDespues.add(Calendar.MINUTE, tomaEncontrada.getPosposiciones() * 10);
-                fechaLimiteDespues.add(Calendar.HOUR_OF_DAY, 1);
+                fechaLimiteDespues.add(Calendar.MINUTE, tomaEncontrada.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
+                fechaLimiteDespues.add(Calendar.HOUR_OF_DAY, Constants.HORAS_OMITIDA);
             }
             
             if (ahora.after(fechaLimiteDespues)) {
@@ -332,9 +349,11 @@ public class TomaTrackingService {
     }
     
     /**
-     * Obtiene la toma programada más próxima que se puede marcar como tomada
-     * @param medicamentoId ID del medicamento
-     * @return TomaProgramada más próxima válida, o null si no hay ninguna
+     * Obtiene la toma programada más próxima que se puede marcar como tomada.
+     * La toma debe estar dentro de la ventana válida (10 minutos antes hasta 1 hora después).
+     * 
+     * @param medicamentoId ID del medicamento.
+     * @return La toma programada más próxima válida, o null si no hay ninguna disponible.
      */
     public TomaProgramada obtenerTomaProximaValida(String medicamentoId) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -366,9 +385,9 @@ public class TomaTrackingService {
             
             // Verificar que no haya pasado más de 1 hora
             Calendar fechaLimite = (Calendar) fechaToma.clone();
-            fechaLimite.add(Calendar.HOUR_OF_DAY, 1);
+            fechaLimite.add(Calendar.HOUR_OF_DAY, Constants.HORAS_OMITIDA);
             if (toma.getPosposiciones() > 0) {
-                fechaLimite.add(Calendar.MINUTE, toma.getPosposiciones() * 10);
+                fechaLimite.add(Calendar.MINUTE, toma.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
             }
             
             if (ahora.after(fechaLimite)) {
@@ -377,7 +396,7 @@ public class TomaTrackingService {
             
             // Verificar que no sea más de 10 minutos antes
             Calendar fechaLimiteAntes = (Calendar) fechaToma.clone();
-            fechaLimiteAntes.add(Calendar.MINUTE, -10);
+            fechaLimiteAntes.add(Calendar.MINUTE, -Constants.MINUTOS_ALERTA_AMARILLA);
             if (ahora.before(fechaLimiteAntes)) {
                 continue; // Aún es muy temprano
             }
@@ -394,7 +413,10 @@ public class TomaTrackingService {
     }
     
     /**
-     * Marca una toma como tomada
+     * Marca una toma como tomada.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @param horario El horario de la toma en formato "HH:mm".
      */
     public void marcarTomaComoTomada(String medicamentoId, String horario) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -413,7 +435,13 @@ public class TomaTrackingService {
     }
     
     /**
-     * Pospone una toma (máximo 3 veces)
+     * Pospone una toma reprogramándola 10 minutos después.
+     * Solo se puede posponer hasta un máximo de 3 veces. Si se alcanza el máximo,
+     * la toma se marca como omitida.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @param horario El horario de la toma en formato "HH:mm".
+     * @return true si se pudo posponer, false si ya se alcanzó el máximo de posposiciones.
      */
     public boolean posponerToma(String medicamentoId, String horario) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -428,7 +456,7 @@ public class TomaTrackingService {
                     // Reprogramar la toma 10 minutos después
                     Calendar cal = Calendar.getInstance();
                     cal.setTime(toma.getFechaHoraProgramada());
-                    cal.add(Calendar.MINUTE, 10);
+                    cal.add(Calendar.MINUTE, Constants.MINUTOS_POSPOSICION);
                     toma.setFechaHoraProgramada(cal.getTime());
                     toma.setEstado(TomaProgramada.EstadoTomaProgramada.PENDIENTE);
                     guardarTomasProgramadas();
@@ -447,7 +475,10 @@ public class TomaTrackingService {
     }
     
     /**
-     * Verifica si un medicamento tiene tomas omitidas
+     * Verifica si un medicamento tiene tomas omitidas.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @return true si el medicamento tiene al menos una toma omitida, false en caso contrario.
      */
     public boolean tieneTomasOmitidas(String medicamentoId) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -465,7 +496,11 @@ public class TomaTrackingService {
     }
     
     /**
-     * Verifica si un medicamento completó todas sus tomas del día
+     * Verifica si un medicamento completó todas sus tomas del día.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @return true si todas las tomas del día fueron marcadas como tomadas, false en caso contrario.
+     *         Retorna false si no hay tomas programadas.
      */
     public boolean completoTodasLasTomasDelDia(String medicamentoId) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -484,9 +519,12 @@ public class TomaTrackingService {
     }
     
     /**
-     * Verifica si un medicamento tiene tomas que pueden posponerse
-     * (dentro de la ventana de 1 hora después de la hora programada)
-     * Solo aplica después de las 00:00hs para tomas programadas a las 00:00hs
+     * Verifica si un medicamento tiene tomas que pueden posponerse.
+     * Solo aplica después de las 00:00hs para tomas programadas a las 00:00hs,
+     * dentro de la ventana de 1 hora después de la hora programada.
+     * 
+     * @param medicamentoId El ID del medicamento.
+     * @return true si hay tomas que pueden posponerse, false en caso contrario.
      */
     public boolean tieneTomasPosponibles(String medicamentoId) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
@@ -540,9 +578,11 @@ public class TomaTrackingService {
     }
     
     /**
-     * Marca automáticamente como omitidas las tomas que pasaron las 01:01hs sin ser tomadas
-     * Solo marca tomas del día actual que YA PASARON y no fueron tomadas
-     * NO marca tomas futuras
+     * Marca automáticamente como omitidas las tomas que pasaron las 01:01hs sin ser tomadas.
+     * Solo marca tomas del día actual que YA PASARON y no fueron tomadas.
+     * NO marca tomas futuras.
+     * 
+     * Este método se utiliza para limpiar tomas del día anterior después de las 01:01hs.
      */
     public void marcarTomasOmitidasDespuesDe0101() {
         Calendar ahora = Calendar.getInstance();
@@ -603,7 +643,8 @@ public class TomaTrackingService {
     }
     
     /**
-     * Limpia las tomas del día anterior
+     * Limpia las tomas del día anterior.
+     * Elimina todas las tomas programadas cuya fecha es anterior al día actual.
      */
     public void limpiarTomasAnteriores() {
         Calendar hoy = Calendar.getInstance();

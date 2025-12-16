@@ -57,6 +57,8 @@ public class AuthService {
             // El usuario verá un mensaje de error apropiado
         }
         
+        // Configurar para que siempre muestre el selector de cuenta
+        // No especificar accountName para permitir seleccionar cualquier cuenta
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(webClientId)
             .requestEmail()
@@ -129,11 +131,23 @@ public class AuthService {
     }
     
     /**
-     * Cierra la sesión de Google
+     * Cierra la sesión de Google y revoca el acceso para permitir seleccionar otra cuenta
      */
     public void signOutGoogle() {
         if (googleSignInClient != null) {
-            googleSignInClient.signOut();
+            // Primero revocar acceso para limpiar la cuenta seleccionada
+            googleSignInClient.revokeAccess().addOnCompleteListener(new OnCompleteListener<Void>() {
+                @Override
+                public void onComplete(@NonNull Task<Void> task) {
+                    // Luego hacer signOut
+                    googleSignInClient.signOut().addOnCompleteListener(new OnCompleteListener<Void>() {
+                        @Override
+                        public void onComplete(@NonNull Task<Void> task) {
+                            Log.d(TAG, "Sesión de Google cerrada y acceso revocado");
+                        }
+                    });
+                }
+            });
         }
     }
     
