@@ -235,8 +235,8 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
                                     "✓ " + medicamento.getNombre() + " marcado como tomado. Completaste todas las tomas del día.",
                                     Toast.LENGTH_LONG).show();
                         } else {
-                    medicamentos = dataManager.ordenarPorHorario(medicamentos);
-                            adapter.notifyDataSetChanged();
+                            medicamentos = dataManager.ordenarPorHorario(medicamentos);
+                            adapter.actualizarMedicamentos(medicamentos);
                             Toast.makeText(MainActivity.this,
                                     "✓ " + medicamento.getNombre() + " marcado como tomado",
                                     Toast.LENGTH_SHORT).show();
@@ -291,7 +291,7 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         // Si la posposición fue exitosa, el horario cambió y necesita reordenarse
         // Si falló (máximo alcanzado), la toma puede haberse marcado como omitida
         medicamentos = dataManager.ordenarPorHorario(medicamentos);
-        adapter.notifyDataSetChanged();
+        adapter.actualizarMedicamentos(medicamentos);
     }
     
     private String obtenerHorarioTomaEnAlerta(Medicamento medicamento) {
