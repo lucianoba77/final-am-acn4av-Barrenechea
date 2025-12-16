@@ -45,8 +45,8 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     private BotiquinAdapter adapterOcasionales;
     
     // Listas de medicamentos
-    private List<Medicamento> medicamentosTratamiento = new ArrayList<>();
-    private List<Medicamento> medicamentosOcasionales = new ArrayList<>();
+    private final List<Medicamento> medicamentosTratamiento = new ArrayList<>();
+    private final List<Medicamento> medicamentosOcasionales = new ArrayList<>();
     
     // Botones de navegación
     private MaterialButton btnNavHome;
@@ -149,7 +149,9 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
             public void onSuccess(List<?> result) {
                 List<Medicamento> todosLosMedicamentos = new ArrayList<>();
                 if (result != null) {
-                    todosLosMedicamentos = (List<Medicamento>) result;
+                    @SuppressWarnings("unchecked")
+                    List<Medicamento> resultList = (List<Medicamento>) result;
+                    todosLosMedicamentos = resultList;
                 }
                 
                 // Separar medicamentos por tipo
@@ -227,21 +229,18 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         new AlertDialog.Builder(this)
                 .setTitle("Eliminar Medicamento")
                 .setMessage("¿Estás seguro de que quieres eliminar " + medicamento.getNombre() + "?")
-                .setPositiveButton("Eliminar", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        if (!NetworkUtils.isNetworkAvailable(BotiquinActivity.this)) {
-                            Toast.makeText(BotiquinActivity.this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
-                            return;
-                        }
-
-                        // Cancelar alarmas antes de eliminar
-                        AlarmScheduler alarmScheduler = new AlarmScheduler(BotiquinActivity.this);
-                        alarmScheduler.cancelarAlarmasMedicamento(medicamento);
-                        
-                        // Verificar si hay eventos de Google Calendar y preguntar si quiere eliminarlos
-                        verificarYPreguntarEliminarEventos(medicamento.getId());
+                .setPositiveButton("Eliminar", (dialog, which) -> {
+                    if (!NetworkUtils.isNetworkAvailable(BotiquinActivity.this)) {
+                        Toast.makeText(BotiquinActivity.this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+                        return;
                     }
+
+                    // Cancelar alarmas antes de eliminar
+                    AlarmScheduler alarmScheduler = new AlarmScheduler(BotiquinActivity.this);
+                    alarmScheduler.cancelarAlarmasMedicamento(medicamento);
+                    
+                    // Verificar si hay eventos de Google Calendar y preguntar si quiere eliminarlos
+                    verificarYPreguntarEliminarEventos(medicamento.getId());
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
@@ -251,23 +250,19 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
      * Verifica si hay eventos de Google Calendar y pregunta si quiere eliminarlos
      */
     private void verificarYPreguntarEliminarEventos(String medicamentoId) {
-        googleCalendarSyncHelper.obtenerEventoIds(medicamentoId, new GoogleCalendarSyncHelper.EventoIdsCallback() {
-            @Override
-            public void onSuccess(List<String> eventoIds) {
-                if (eventoIds != null && !eventoIds.isEmpty()) {
-                    // Hay eventos, preguntar si quiere eliminarlos
-                    com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper helper = 
-                        new com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper(BotiquinActivity.this);
-                    helper.preguntarYEliminarEventos(medicamentoId, eventoIds, () -> {
-                        // Callback: continuar con la eliminación del medicamento
-                        eliminarMedicamentoDeFirestore(medicamentoId);
-                    });
-                } else {
-                    // No hay eventos, eliminar directamente el medicamento
+        googleCalendarSyncHelper.obtenerEventoIds(medicamentoId, eventoIds -> {
+            if (eventoIds != null && !eventoIds.isEmpty()) {
+                // Hay eventos, preguntar si quiere eliminarlos
+                com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper helper = 
+                    new com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper(BotiquinActivity.this);
+                helper.preguntarYEliminarEventos(medicamentoId, eventoIds, () -> {
+                    // Callback: continuar con la eliminación del medicamento
                     eliminarMedicamentoDeFirestore(medicamentoId);
-                }
+                });
+            } else {
+                // No hay eventos, eliminar directamente el medicamento
+                eliminarMedicamentoDeFirestore(medicamentoId);
             }
-            
         });
     }
     
@@ -404,41 +399,33 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         android.view.Window window = getWindow();
         
         // Asegurar que la barra de estado sea visible
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            // Limpiar cualquier flag que pueda ocultar la barra de estado
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            
-            // Habilitar dibujo de la barra de estado
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            
-            // Establecer color de la barra de estado
-            window.setStatusBarColor(getResources().getColor(R.color.primary_dark));
-        }
+        // minSdk es 29, así que LOLLIPOP (21) siempre será true
+        // Limpiar cualquier flag que pueda ocultar la barra de estado
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        
+        // Habilitar dibujo de la barra de estado
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        
+        // Establecer color de la barra de estado (usando ContextCompat para compatibilidad)
+        window.setStatusBarColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary_dark));
         
         // Configurar apariencia de la barra de estado
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             // API 30+
             WindowInsetsControllerCompat controller = 
                 WindowCompat.getInsetsController(window, window.getDecorView());
-            if (controller != null) {
-                controller.setAppearanceLightStatusBars(false);
-                // Asegurar que la barra de estado sea visible
-                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
-            }
-        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            // API 23-29
+            // controller nunca es null según WindowCompat.getInsetsController
+            controller.setAppearanceLightStatusBars(false);
+            // Asegurar que la barra de estado sea visible
+            controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
+        } else {
+            // API 29 (minSdk es 29, así que M (23) siempre será true)
             int flags = window.getDecorView().getSystemUiVisibility();
             // Limpiar flags que oculten la barra de estado
             flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
             flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
             flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            window.getDecorView().setSystemUiVisibility(flags);
-        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            // API 21-22
-            int flags = window.getDecorView().getSystemUiVisibility();
-            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
-            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
             window.getDecorView().setSystemUiVisibility(flags);
         }
     }
