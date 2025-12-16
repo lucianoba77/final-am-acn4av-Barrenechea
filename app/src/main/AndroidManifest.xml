@@ -56,7 +56,7 @@
 
         <!-- Pantalla de login - Actividad principal -->
         <activity
-            android:name=".LoginActivity"
+            android:name="com.controlmedicamentos.myapplication.LoginActivity"
             android:exported="true"
             android:theme="@style/Theme.ControlMedicamentos">
             <intent-filter>
