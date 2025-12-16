@@ -318,12 +318,6 @@ public class DetallesMedicamentoActivity extends AppCompatActivity {
     }
     
     /**
-     * Crea un Intent para abrir esta Activity con un medicamento específico
-     * @param context Contexto de la aplicación
-     * @param medicamentoId ID del medicamento a mostrar
-     * @return Intent configurado para abrir DetallesMedicamentoActivity
-     */
-    /**
      * Configura la barra de estado para que sea visible
      */
     private void configurarBarraEstado() {
