@@ -110,56 +110,35 @@ public class GoogleCalendarAuthService {
                                     public void onSuccess(Object result) {
                                         if (result != null) {
                                             // Token renovado exitosamente, retornar el nuevo token
+                                            Log.d(TAG, "Token renovado exitosamente");
                                             if (callback != null) {
                                                 callback.onSuccess(result);
                                             }
                                         } else {
-                                            // No se pudo renovar, eliminar token
-                                            Log.d(TAG, "No se pudo renovar el token, eliminando");
-                                eliminarTokenGoogle(new FirestoreCallback() {
-                                    @Override
-                                    public void onSuccess(Object result) {
-                                        Log.d(TAG, "Token eliminado después de fallo en renovación");
-                                        if (callback != null) {
-                                            callback.onSuccess(null);
+                                            // No se pudo renovar, pero NO eliminar el token
+                                            // Puede ser un error temporal de red, mantener el token
+                                            Log.w(TAG, "No se pudo renovar el token, pero manteniéndolo (puede ser error temporal)");
+                                            // Retornar el token expirado de todas formas, el código que lo use puede manejar el error
+                                            if (callback != null) {
+                                                callback.onSuccess(tokenData);
+                                            }
                                         }
                                     }
                                     
                                     @Override
                                     public void onError(Exception exception) {
-                                        Log.e(TAG, "Error al eliminar token después de fallo en renovación", exception);
-                                        // Aún así, notificar éxito al callback para no bloquear el flujo
+                                        // Error al renovar, pero NO eliminar el token
+                                        // Puede ser un error temporal de red
+                                        Log.w(TAG, "Error al renovar token, pero manteniéndolo (puede ser error temporal)", exception);
+                                        // Retornar el token expirado de todas formas
                                         if (callback != null) {
-                                            callback.onSuccess(null);
+                                            callback.onSuccess(tokenData);
                                         }
-                                    }
-                                });
-                                        }
-                                    }
-                                    
-                                    @Override
-                                    public void onError(Exception exception) {
-                                        // Error al renovar, eliminar token
-                                        Log.e(TAG, "Error al renovar token, eliminando", exception);
-                                        eliminarTokenGoogle(new FirestoreCallback() {
-                                            @Override
-                                            public void onSuccess(Object result) {
-                                                if (callback != null) {
-                                                    callback.onSuccess(null);
-                                                }
-                                            }
-                                            
-                                            @Override
-                                            public void onError(Exception exception) {
-                                                if (callback != null) {
-                                                    callback.onSuccess(null);
-                                                }
-                                            }
-                                        });
                                     }
                                 });
                             } else {
                                 // Token válido, retornarlo
+                                Log.d(TAG, "Token de Google Calendar válido");
                                 if (callback != null) {
                                     callback.onSuccess(tokenData);
                                 }

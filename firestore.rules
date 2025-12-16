@@ -3,95 +3,215 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Función helper para verificar si es asistente
+    // ==================== FUNCIONES HELPER ====================
+    
+    // Verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Verificar si es el dueño del recurso
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Verificar si es asistente
     function esAsistente() {
-      return request.auth != null && 
+      return isAuthenticated() && 
         exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'asistente';
     }
     
-    // Función helper para obtener pacienteId del asistente
+    // Obtener pacienteId del asistente
     function pacienteIdDelAsistente() {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.pacienteId;
     }
     
-    // Reglas para usuarios
+    // Validar formato de horario (HH:mm)
+    function isValidTimeFormat(time) {
+      return time is string && 
+             time.matches('^([0-1][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+    
+    // Validar presentación válida
+    function isValidPresentacion(presentacion) {
+      return presentacion is string && 
+             presentacion in ['Comprimidos', 'Cápsulas', 'Jarabe', 'Crema', 
+                             'Pomada', 'Spray nasal', 'Inyección', 'Gotas', 'Parche'];
+    }
+    
+    // Validar datos de medicamento
+    function isValidMedicamento() {
+      let data = request.resource.data;
+      
+      // Validar campos requeridos
+      return data.nombre is string && 
+             data.nombre.size() > 0 && 
+             data.nombre.size() <= 100 &&
+             data.userId is string &&
+             data.userId == request.auth.uid && // ✅ CRÍTICO: userId debe ser del usuario autenticado
+             data.presentacion is string &&
+             isValidPresentacion(data.presentacion) &&
+             data.tomasDiarias is int &&
+             data.tomasDiarias >= 1 &&
+             data.tomasDiarias <= 24 && // Máximo razonable: 24 tomas al día
+             data.horarioPrimeraToma is string &&
+             isValidTimeFormat(data.horarioPrimeraToma) &&
+             data.stockInicial is int &&
+             data.stockInicial >= 0 &&
+             data.stockInicial <= 10000 && // Límite razonable
+             data.stockActual is int &&
+             data.stockActual >= 0 &&
+             data.stockActual <= 10000 &&
+             data.stockActual <= data.stockInicial && // stockActual no puede ser mayor que stockInicial
+             data.color is int &&
+             data.color >= 0 &&
+             data.diasTratamiento is int &&
+             (data.diasTratamiento == -1 || (data.diasTratamiento >= 1 && data.diasTratamiento <= 3650)) && // -1 para crónico, o entre 1 y 10 años
+             data.activo is bool &&
+             data.pausado is bool &&
+             // Campos opcionales
+             (!('afeccion' in data) || (data.afeccion is string && data.afeccion.size() <= 200)) &&
+             (!('detalles' in data) || (data.detalles is string && data.detalles.size() <= 1000));
+    }
+    
+    // Validar que no se cambien campos inmutables en update
+    function camposInmutablesNoCambiaron() {
+      let data = request.resource.data;
+      let oldData = resource.data;
+      
+      return data.userId == oldData.userId && // ✅ No se puede cambiar userId
+             data.fechaCreacion == oldData.fechaCreacion; // ✅ No se puede cambiar fechaCreacion
+    }
+    
+    // Validar datos de toma
+    function isValidToma() {
+      let data = request.resource.data;
+      
+      return data.userId is string &&
+             data.userId == request.auth.uid && // ✅ CRÍTICO: userId debe ser del usuario autenticado
+             data.medicamentoId is string &&
+             data.medicamentoId.size() > 0 &&
+             data.medicamentoNombre is string &&
+             data.medicamentoNombre.size() > 0 &&
+             data.estado is string &&
+             data.estado in ['TOMADA', 'PERDIDA', 'PENDIENTE'] &&
+             data.fechaHoraProgramada is timestamp &&
+             (!('fechaHoraTomada' in data) || data.fechaHoraTomada is timestamp) &&
+             (!('observaciones' in data) || (data.observaciones is string && data.observaciones.size() <= 500));
+    }
+    
+    // Validar datos de usuario
+    function isValidUsuario() {
+      let data = request.resource.data;
+      
+      return data.nombre is string &&
+             data.nombre.size() > 0 &&
+             data.nombre.size() <= 100 &&
+             data.email is string &&
+             data.email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$') &&
+             (!('telefono' in data) || (data.telefono is string && data.telefono.size() <= 20)) &&
+             (!('edad' in data) || (data.edad is int && data.edad >= 0 && data.edad <= 150)) &&
+             (!('role' in data) || (data.role is string && data.role in ['paciente', 'asistente']));
+    }
+    
+    // ==================== REGLAS PARA USUARIOS ====================
+    
     match /usuarios/{userId} {
-      // Los usuarios pueden leer y escribir su propio documento
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Leer: solo el mismo usuario o su asistente
+      allow read: if isAuthenticated() && 
+                     (isOwner(userId) || 
+                      (esAsistente() && pacienteIdDelAsistente() == userId));
       
-      // Los asistentes pueden leer el documento de su paciente
-      allow read: if esAsistente() && pacienteIdDelAsistente() == userId;
+      // Crear: solo el mismo usuario, datos válidos
+      allow create: if isAuthenticated() && 
+                       userId == request.auth.uid &&
+                       isValidUsuario();
+      
+      // Actualizar: solo el mismo usuario, datos válidos, no cambiar userId
+      allow update: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       isValidUsuario() &&
+                       request.resource.data.userId == resource.data.userId; // ✅ No cambiar userId si existe
+      
+      // Eliminar: solo el mismo usuario
+      allow delete: if isAuthenticated() && isOwner(userId);
     }
     
-    // Reglas para medicamentos
+    // ==================== REGLAS PARA MEDICAMENTOS ====================
+    
     match /medicamentos/{medicamentoId} {
-      // Los pacientes pueden crear medicamentos para sí mismos
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
+      // Leer: solo el dueño o su asistente
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid ||
+                      (esAsistente() && pacienteIdDelAsistente() == resource.data.userId));
       
-      // Los pacientes pueden leer sus propios medicamentos
-      allow read: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+      // Crear: usuario autenticado, datos válidos, userId correcto
+      allow create: if isAuthenticated() && 
+                       isValidMedicamento() &&
+                       request.resource.data.userId == request.auth.uid; // ✅ Servidor valida userId
       
-      // Los pacientes pueden actualizar y eliminar sus propios medicamentos
-      allow update, delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+      // Actualizar: solo el dueño, datos válidos, campos inmutables no cambiaron
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       isValidMedicamento() &&
+                       camposInmutablesNoCambiaron(); // ✅ Prevenir cambios no autorizados
       
-      // Los asistentes pueden leer los medicamentos de su paciente
-      // IMPORTANTE: Esta regla permite que los asistentes lean medicamentos
-      // donde el userId del medicamento coincide con su pacienteId
-      allow read: if esAsistente() && 
-        pacienteIdDelAsistente() == resource.data.userId;
+      // Eliminar: solo el dueño
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
     }
     
-    // Reglas para asistentes
+    // ==================== REGLAS PARA ASISTENTES ====================
+    
     match /asistentes/{asistenteId} {
-      // IMPORTANTE: Permitir que cualquier usuario autenticado pueda leer para verificar si es asistente
-      // Esto es necesario para la función esAsistenteDe
-      allow read: if request.auth != null;
+      // Leer: cualquier usuario autenticado (necesario para verificar si es asistente)
+      // O el paciente dueño, o el asistente mismo
+      allow read: if isAuthenticated() && 
+                     (resource.data.pacienteId == request.auth.uid ||
+                      request.auth.uid == asistenteId ||
+                      esAsistente());
       
-      // Los pacientes pueden leer sus propios asistentes
-      allow read: if request.auth != null && 
-        resource.data.pacienteId == request.auth.uid;
+      // Crear: paciente autenticado, pacienteId correcto
+      allow create: if isAuthenticated() && 
+                       request.resource.data.pacienteId == request.auth.uid &&
+                       request.resource.data.pacienteId is string &&
+                       request.resource.data.pacienteId.size() > 0;
       
-      // Los pacientes pueden crear asistentes para sí mismos
-      allow create: if request.auth != null && 
-        request.resource.data.pacienteId == request.auth.uid;
-      
-      // Los pacientes pueden eliminar sus propios asistentes
-      allow delete: if request.auth != null && 
-        resource.data.pacienteId == request.auth.uid;
-      
-      // Los asistentes pueden leer su propio documento
-      allow read: if request.auth != null && 
-        request.auth.uid == asistenteId;
+      // Eliminar: solo el paciente dueño
+      allow delete: if isAuthenticated() && 
+                       resource.data.pacienteId == request.auth.uid;
     }
     
-    // Reglas para tokens de Google Calendar
+    // ==================== REGLAS PARA TOKENS DE GOOGLE CALENDAR ====================
+    
     match /googleTokens/{userId} {
-      // Los usuarios solo pueden leer y escribir su propio token
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Solo el mismo usuario puede leer y escribir su token
+      allow read, write: if isAuthenticated() && isOwner(userId);
     }
     
-    // Reglas para tomas de medicamentos
+    // ==================== REGLAS PARA TOMAS ====================
+    
     match /tomas/{tomaId} {
-      // Los usuarios pueden crear tomas para sí mismos
-      // IMPORTANTE: Usar request.resource.data para create porque el documento aún no existe
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
+      // Leer: solo el dueño o su asistente
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid ||
+                      (esAsistente() && pacienteIdDelAsistente() == resource.data.userId));
       
-      // Los usuarios pueden leer sus propias tomas
-      allow read: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+      // Crear: usuario autenticado, datos válidos, userId correcto
+      allow create: if isAuthenticated() && 
+                       isValidToma() &&
+                       request.resource.data.userId == request.auth.uid; // ✅ Servidor valida userId
       
-      // Los usuarios pueden actualizar y eliminar sus propias tomas
-      allow update, delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+      // Actualizar: solo el dueño, datos válidos, no cambiar userId
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       isValidToma() &&
+                       request.resource.data.userId == resource.data.userId; // ✅ No cambiar userId
       
-      // Los asistentes pueden leer las tomas de su paciente
-      allow read: if esAsistente() && 
-        pacienteIdDelAsistente() == resource.data.userId;
+      // Eliminar: solo el dueño
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
     }
   }
 }

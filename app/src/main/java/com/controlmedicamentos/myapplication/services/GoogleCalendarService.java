@@ -651,9 +651,12 @@ public class GoogleCalendarService {
                 public void onResponse(Call call, Response response) throws IOException {
                     if (!response.isSuccessful()) {
                         String errorBody = response.body() != null ? response.body().string() : "Error desconocido";
-                        Log.e(TAG, "Error al crear evento recurrente: " + response.code() + " - " + errorBody);
+                        int code = response.code();
+                        Log.e(TAG, "Error al crear evento recurrente: " + code + " - " + errorBody);
                         
-                        Exception exception = new Exception("Error al crear evento recurrente: " + errorBody);
+                        // Si es error 401 (Unauthorized), el token puede estar expirado
+                        // No intentar renovar aquí, solo reportar el error
+                        Exception exception = new Exception("Error al crear evento recurrente: " + code + " - " + errorBody);
                         if (callback != null) {
                             callback.onError(exception);
                         }

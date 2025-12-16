@@ -689,6 +689,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                                         String accessToken = (String) tokenData.get("access_token");
                                         
                                         if (accessToken != null && !accessToken.isEmpty()) {
+                                            Logger.d("NuevaMedicinaActivity", 
+                                                "Token de Google Calendar obtenido, creando eventos");
                                             // Crear eventos recurrentes en Google Calendar
                                             googleCalendarService.crearEventosRecurrentes(
                                                 accessToken, 
@@ -715,8 +717,11 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                                             );
                                         } else {
                                             Logger.w("NuevaMedicinaActivity", 
-                                                "Token de Google Calendar no disponible");
+                                                "Token de Google Calendar no disponible o vacío");
                                         }
+                                    } else {
+                                        Logger.w("NuevaMedicinaActivity", 
+                                            "Token de Google Calendar es null o no es un Map");
                                     }
                                 }
                                 
@@ -724,7 +729,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                                 public void onError(Exception exception) {
                                     Logger.w("NuevaMedicinaActivity", 
                                         "Error al obtener token de Google Calendar", exception);
-                                    // No mostrar error al usuario, es opcional
+                                    // No intentar crear eventos si no se pudo obtener el token
+                                    // El error ya está logueado para debugging
                                 }
                             }
                         );

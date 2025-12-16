@@ -945,7 +945,27 @@ public class AjustesActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Verificar conexión cuando la actividad vuelve a primer plano
-        verificarConexionGoogleCalendar();
+        
+        // Verificar si venimos de GoogleCalendarCallbackActivity con conexión exitosa
+        Intent intent = getIntent();
+        if (intent != null && intent.getBooleanExtra("google_calendar_conectado", false)) {
+            // Si se conectó exitosamente, actualizar UI directamente y verificar después de un delay
+            googleCalendarConectado = true;
+            actualizarUIGoogleCalendar();
+            
+            // Verificar después de un delay para asegurar que el token esté disponible
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    verificarConexionGoogleCalendar();
+                }
+            }, 1000); // Esperar 1 segundo para que Firestore complete la escritura
+            
+            // Limpiar el extra para que no se ejecute en próximos onResume
+            intent.removeExtra("google_calendar_conectado");
+        } else {
+            // Verificar conexión normalmente cuando la actividad vuelve a primer plano
+            verificarConexionGoogleCalendar();
+        }
     }
 }

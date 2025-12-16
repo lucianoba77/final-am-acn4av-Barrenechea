@@ -125,15 +125,24 @@ public class GoogleCalendarCallbackActivity extends AppCompatActivity {
                 @Override
                 public void onSuccess(Object result) {
                     Log.d(TAG, "Token de Google Calendar guardado exitosamente");
-                    Toast.makeText(GoogleCalendarCallbackActivity.this, 
-                        "Google Calendar conectado exitosamente", 
-                        Toast.LENGTH_SHORT).show();
                     
-                    // Regresar a AjustesActivity
-                    Intent ajustesIntent = new Intent(GoogleCalendarCallbackActivity.this, AjustesActivity.class);
-                    ajustesIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(ajustesIntent);
-                    finish();
+                    // Esperar un momento para asegurar que el token se haya guardado en Firestore
+                    // antes de regresar a AjustesActivity
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(GoogleCalendarCallbackActivity.this, 
+                                "Google Calendar conectado exitosamente", 
+                                Toast.LENGTH_SHORT).show();
+                            
+                            // Regresar a AjustesActivity con flag para indicar que se conectó exitosamente
+                            Intent ajustesIntent = new Intent(GoogleCalendarCallbackActivity.this, AjustesActivity.class);
+                            ajustesIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                            ajustesIntent.putExtra("google_calendar_conectado", true);
+                            startActivity(ajustesIntent);
+                            finish();
+                        }
+                    }, 500); // Esperar 500ms para que Firestore complete la escritura
                 }
                 
                 @Override
