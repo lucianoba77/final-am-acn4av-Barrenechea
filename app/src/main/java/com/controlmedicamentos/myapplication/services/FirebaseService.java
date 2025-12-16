@@ -1219,6 +1219,11 @@ public class FirebaseService {
         if (document.get("diasRestantesDuracion") != null) {
             medicamento.setDiasRestantesDuracion(document.getLong("diasRestantesDuracion").intValue());
         }
+        
+        Logger.d(TAG, String.format("mapToMedicamento: ✅ Mapeo completado para '%s' (ID: %s) - TomasDiarias: %d, StockActual: %d, Pausado: %s", 
+            medicamento.getNombre(), medicamento.getId(), medicamento.getTomasDiarias(), 
+            medicamento.getStockActual(), medicamento.isPausado()));
+        
         return medicamento;
     }
 
