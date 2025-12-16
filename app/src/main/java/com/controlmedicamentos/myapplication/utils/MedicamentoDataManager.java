@@ -98,8 +98,16 @@ public class MedicamentoDataManager {
                     Logger.d("MedicamentoDataManager", "Carga inicial: " + todosLosMedicamentos.size() + 
                             " medicamentos cargados desde Firebase");
                     
-                    // Inicializar tomas del día para cada medicamento
+                    // Filtrar medicamentos activos: solo activos y no pausados (consistente con listener)
+                    List<Medicamento> medicamentosActivos = new ArrayList<>();
                     for (Medicamento med : todosLosMedicamentos) {
+                        if (med.isActivo() && !med.isPausado()) {
+                            medicamentosActivos.add(med);
+                        }
+                    }
+                    
+                    // Inicializar tomas del día solo para medicamentos activos y no pausados
+                    for (Medicamento med : medicamentosActivos) {
                         Logger.d("MedicamentoDataManager", "Inicializando tomas para: " + med.getNombre() + 
                               " (ID: " + med.getId() + ", activo: " + med.isActivo() + 
                               ", tomasDiarias: " + med.getTomasDiarias() + 
@@ -110,9 +118,9 @@ public class MedicamentoDataManager {
                     // Marcar tomas omitidas después de las 01:01hs
                     tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
                     
-                    // Filtrar medicamentos usando la clase utilitaria
+                    // Filtrar medicamentos usando la clase utilitaria (usar medicamentosActivos para consistencia)
                     List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
-                        todosLosMedicamentos, tomaTrackingService
+                        medicamentosActivos, tomaTrackingService
                     );
                     
                     if (callback != null) {

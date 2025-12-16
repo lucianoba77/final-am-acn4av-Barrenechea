@@ -24,6 +24,7 @@ import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
 import com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper;
+import com.controlmedicamentos.myapplication.utils.Logger;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -257,29 +258,23 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                         alarmScheduler.cancelarAlarmasMedicamento(medicamento);
                         
                         // Eliminar eventos de Google Calendar antes de eliminar el medicamento
+                        // Nota: La eliminación del medicamento debe ocurrir incluso si falla la sincronización
                         googleCalendarSyncHelper.eliminarEventosMedicamento(medicamento.getId(), 
                             new GoogleCalendarSyncHelper.SyncCallback() {
                                 @Override
                                 public void onSuccess() {
-                                    // Después de eliminar eventos, eliminar el medicamento
-                                    firebaseService.eliminarMedicamento(medicamento.getId(), 
-                                        new FirebaseService.FirestoreCallback() {
-                                            @Override
-                                            public void onSuccess(Object result) {
-                                                Toast.makeText(BotiquinActivity.this, 
-                                                    "Medicamento eliminado", Toast.LENGTH_SHORT).show();
-                                                cargarMedicamentos();
-                                            }
+                                    // Después de eliminar eventos (o si no hay eventos), eliminar el medicamento
+                                    eliminarMedicamentoDeFirestore(medicamento.getId());
+                                }
 
-                                            @Override
-                                            public void onError(Exception exception) {
-                                                Toast.makeText(BotiquinActivity.this, 
-                                                    "Error al eliminar medicamento: " + 
-                                                    (exception != null ? exception.getMessage() : "Error desconocido"), 
-                                                    Toast.LENGTH_LONG).show();
-                                            }
-                                        }
-                                    );
+                                @Override
+                                public void onError(Exception exception) {
+                                    // Si falla la sincronización con Google Calendar, aún así eliminar el medicamento
+                                    // La sincronización con Google Calendar no es crítica para la eliminación
+                                    Logger.w("BotiquinActivity", 
+                                        "Error al eliminar eventos de Google Calendar, continuando con eliminación del medicamento", 
+                                        exception);
+                                    eliminarMedicamentoDeFirestore(medicamento.getId());
                                 }
                             }
                         );
@@ -287,6 +282,37 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
+    }
+
+    /**
+     * Elimina un medicamento de Firestore.
+     * Este método se llama después de intentar eliminar los eventos de Google Calendar,
+     * independientemente de si la sincronización fue exitosa o falló.
+     * 
+     * @param medicamentoId ID del medicamento a eliminar.
+     */
+    private void eliminarMedicamentoDeFirestore(String medicamentoId) {
+        firebaseService.eliminarMedicamento(medicamentoId, 
+            new FirebaseService.FirestoreCallback() {
+                @Override
+                public void onSuccess(Object result) {
+                    Toast.makeText(BotiquinActivity.this, 
+                        "Medicamento eliminado", Toast.LENGTH_SHORT).show();
+                    cargarMedicamentos();
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    String errorMessage = (exception != null && exception.getMessage() != null) 
+                        ? exception.getMessage() 
+                        : "Error desconocido";
+                    Toast.makeText(BotiquinActivity.this, 
+                        "Error al eliminar medicamento: " + errorMessage, 
+                        Toast.LENGTH_LONG).show();
+                    Logger.e("BotiquinActivity", "Error al eliminar medicamento de Firestore", exception);
+                }
+            }
+        );
     }
 
     @Override

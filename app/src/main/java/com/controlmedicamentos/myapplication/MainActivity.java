@@ -251,8 +251,10 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
 
                     @Override
                     public void onError(Exception exception) {
-                ErrorHandler.handleErrorWithCustomMessage(MainActivity.this, exception, TAG, 
-                    exception.getMessage() != null ? exception.getMessage() : "Error al registrar la toma");
+                String errorMessage = (exception != null && exception.getMessage() != null) 
+                    ? exception.getMessage() 
+                    : "Error al registrar la toma";
+                ErrorHandler.handleErrorWithCustomMessage(MainActivity.this, exception, TAG, errorMessage);
             }
         });
     }
@@ -282,15 +284,14 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             return;
         }
         
+        // Intentar posponer la toma (el feedback ya se muestra en TomaActionHandler)
         boolean pospuesta = tomaActionHandler.posponerToma(medicamento, horarioToma);
         
-        if (pospuesta) {
-            medicamentos = dataManager.ordenarPorHorario(medicamentos);
-            adapter.notifyDataSetChanged();
-        } else {
-            medicamentos = dataManager.ordenarPorHorario(medicamentos);
-            adapter.notifyDataSetChanged();
-        }
+        // Actualizar la UI independientemente del resultado para reflejar cualquier cambio
+        // Si la posposición fue exitosa, el horario cambió y necesita reordenarse
+        // Si falló (máximo alcanzado), la toma puede haberse marcado como omitida
+        medicamentos = dataManager.ordenarPorHorario(medicamentos);
+        adapter.notifyDataSetChanged();
     }
     
     private String obtenerHorarioTomaEnAlerta(Medicamento medicamento) {

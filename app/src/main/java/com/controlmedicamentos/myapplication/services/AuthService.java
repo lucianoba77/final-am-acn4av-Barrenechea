@@ -67,7 +67,39 @@ public class AuthService {
     }
     
     /**
-     * Obtiene el Intent de Google Sign-In
+     * Obtiene el Intent de Google Sign-In, forzando el selector de cuenta.
+     * Primero hace signOut para limpiar cualquier cuenta previamente seleccionada.
+     * @param callback Callback para notificar cuando el Intent está listo
+     */
+    public void getGoogleSignInIntentWithAccountSelector(final GoogleSignInIntentCallback callback) {
+        if (googleSignInClient == null) {
+            Log.e(TAG, "GoogleSignInClient no inicializado. Llama a initializeGoogleSignIn primero.");
+            if (callback != null) {
+                callback.onError(new Exception("GoogleSignInClient no inicializado"));
+            }
+            return;
+        }
+        
+        // Primero hacer signOut para limpiar cualquier cuenta previamente seleccionada
+        // Esto fuerza que se muestre el selector de cuenta
+        googleSignInClient.signOut().addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                // Incluso si signOut falla, continuar con el Intent
+                // El signOut puede fallar si no hay sesión activa, lo cual está bien
+                Log.d(TAG, "SignOut completado antes de mostrar selector de cuenta");
+                
+                // Ahora obtener el Intent que mostrará el selector de cuenta
+                android.content.Intent signInIntent = googleSignInClient.getSignInIntent();
+                if (callback != null) {
+                    callback.onSuccess(signInIntent);
+                }
+            }
+        });
+    }
+    
+    /**
+     * Obtiene el Intent de Google Sign-In (método legacy, mantiene compatibilidad)
      * @return Intent para iniciar el flujo de Google Sign-In
      */
     public android.content.Intent getGoogleSignInIntent() {
@@ -76,6 +108,14 @@ public class AuthService {
             return null;
         }
         return googleSignInClient.getSignInIntent();
+    }
+    
+    /**
+     * Callback para obtener el Intent de Google Sign-In con selector de cuenta
+     */
+    public interface GoogleSignInIntentCallback {
+        void onSuccess(android.content.Intent signInIntent);
+        void onError(Exception exception);
     }
     
     /**

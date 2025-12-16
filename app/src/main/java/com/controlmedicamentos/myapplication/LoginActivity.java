@@ -254,12 +254,31 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
         
-        Intent signInIntent = authService.getGoogleSignInIntent();
-        if (signInIntent != null) {
-            startActivityForResult(signInIntent, RC_SIGN_IN);
-        } else {
-            Toast.makeText(this, "Error al inicializar Google Sign-In", Toast.LENGTH_LONG).show();
-        }
+        // Mostrar progreso mientras se prepara el selector de cuenta
+        mostrarProgreso(true);
+        
+        // Obtener Intent con selector de cuenta (hace signOut primero para limpiar cuenta previa)
+        authService.getGoogleSignInIntentWithAccountSelector(new AuthService.GoogleSignInIntentCallback() {
+            @Override
+            public void onSuccess(Intent signInIntent) {
+                mostrarProgreso(false);
+                if (signInIntent != null) {
+                    startActivityForResult(signInIntent, RC_SIGN_IN);
+                } else {
+                    Toast.makeText(LoginActivity.this, "Error al inicializar Google Sign-In", Toast.LENGTH_LONG).show();
+                }
+            }
+            
+            @Override
+            public void onError(Exception exception) {
+                mostrarProgreso(false);
+                Log.e(TAG, "Error al obtener Intent de Google Sign-In", exception);
+                Toast.makeText(LoginActivity.this, 
+                    "Error al inicializar Google Sign-In: " + 
+                    (exception != null ? exception.getMessage() : "Error desconocido"), 
+                    Toast.LENGTH_LONG).show();
+            }
+        });
     }
     
     @Override
