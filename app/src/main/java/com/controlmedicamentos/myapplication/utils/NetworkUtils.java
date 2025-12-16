@@ -12,6 +12,8 @@ import android.os.Build;
  * Usa APIs modernas (NetworkCapabilities) para Android 6.0+ y fallback para versiones anteriores
  */
 public class NetworkUtils {
+    
+    // Logger está en el mismo paquete, no necesita import
 
     /**
      * Verifica si hay conexión a internet disponible
