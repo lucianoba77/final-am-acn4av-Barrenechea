@@ -923,8 +923,14 @@ public class FirebaseService {
                     List<Medicamento> medicamentos = new ArrayList<>();
                     for (DocumentSnapshot document : snapshot.getDocuments()) {
                         Medicamento medicamento = mapToMedicamento(document);
-                        medicamentos.add(medicamento);
+                        // Solo agregar medicamentos no-null (mapToMedicamento puede retornar null en caso de error)
+                        if (medicamento != null) {
+                            medicamentos.add(medicamento);
+                        } else {
+                            Logger.w(TAG, "agregarListenerMedicamentos: Medicamento null para documento ID: " + document.getId());
+                        }
                     }
+                    Logger.d(TAG, "agregarListenerMedicamentos: Listener actualizado con " + medicamentos.size() + " medicamentos");
                     if (callback != null) {
                         callback.onSuccess(medicamentos);
                     }

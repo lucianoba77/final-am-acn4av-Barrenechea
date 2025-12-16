@@ -67,6 +67,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     private FirebaseService firebaseService;
     private GoogleCalendarSyncHelper googleCalendarSyncHelper;
     private TomaTrackingService tomaTrackingService;
+    private com.google.firebase.firestore.ListenerRegistration medicamentosListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,7 +105,39 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         inicializarVistas();
         configurarRecyclerViews();
         cargarMedicamentos();
+        configurarListenerTiempoReal();
         configurarNavegacion();
+    }
+    
+    /**
+     * Configura un listener de Firestore en tiempo real para actualizar automáticamente
+     * los medicamentos cuando hay cambios (agregar, modificar, eliminar)
+     */
+    private void configurarListenerTiempoReal() {
+        Logger.d(TAG, "configurarListenerTiempoReal: Configurando listener de Firestore en tiempo real");
+        
+        medicamentosListener = firebaseService.agregarListenerMedicamentos(
+            new FirebaseService.FirestoreListCallback() {
+                @Override
+                public void onSuccess(List<?> result) {
+                    Logger.d(TAG, "configurarListenerTiempoReal: Cambio detectado en Firestore, recargando medicamentos...");
+                    // Recargar medicamentos cuando hay cambios
+                    cargarMedicamentos();
+                }
+                
+                @Override
+                public void onError(Exception exception) {
+                    Logger.e(TAG, "configurarListenerTiempoReal: Error en listener de Firestore", exception);
+                    // No mostrar error al usuario, solo loguear
+                }
+            }
+        );
+        
+        if (medicamentosListener != null) {
+            Logger.d(TAG, "configurarListenerTiempoReal: Listener configurado correctamente");
+        } else {
+            Logger.w(TAG, "configurarListenerTiempoReal: ⚠️ No se pudo configurar el listener (usuario no autenticado?)");
+        }
     }
 
     private void inicializarVistas() {
@@ -499,10 +532,13 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         int medicamentosPausados = 0;
         int medicamentosInactivos = 0;
         int medicamentosActivosNoPausados = 0;
+        // Bug 3 Fix: Agregar verificación de null antes de llamar métodos en cada elemento
         for (Medicamento m : todosLosMedicamentos) {
-            if (m.isPausado()) medicamentosPausados++;
-            if (!m.isActivo()) medicamentosInactivos++;
-            if (m.isActivo() && !m.isPausado()) medicamentosActivosNoPausados++;
+            if (m != null) {
+                if (m.isPausado()) medicamentosPausados++;
+                if (!m.isActivo()) medicamentosInactivos++;
+                if (m.isActivo() && !m.isPausado()) medicamentosActivosNoPausados++;
+            }
         }
         Logger.d(TAG, String.format("separarMedicamentos: RESUMEN - Total: %d, Activos/NoPausados: %d (dashboard), Pausados: %d, Inactivos: %d",
             todosLosMedicamentos.size(), medicamentosActivosNoPausados, medicamentosPausados, medicamentosInactivos));
@@ -840,6 +876,19 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     @Override
     protected void onResume() {
         super.onResume();
+        // Recargar medicamentos al volver a la pantalla
+        // (el listener en tiempo real también actualizará automáticamente)
         cargarMedicamentos();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Remover el listener cuando la actividad se destruye para evitar memory leaks
+        if (medicamentosListener != null) {
+            Logger.d(TAG, "onDestroy: Removiendo listener de Firestore");
+            medicamentosListener.remove();
+            medicamentosListener = null;
+        }
     }
 }

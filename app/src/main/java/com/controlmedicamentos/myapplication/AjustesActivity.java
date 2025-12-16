@@ -840,6 +840,12 @@ public class AjustesActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         
         if (requestCode == RC_GOOGLE_CALENDAR_SIGN_IN) {
+            // Bug 1 Fix: Verificar que data no sea null antes de usarlo
+            if (data == null) {
+                Logger.d("AjustesActivity", "Usuario canceló el flujo de Google Sign-In (data es null)");
+                return;
+            }
+            
             Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
             try {
                 GoogleSignInAccount account = task.getResult(ApiException.class);
@@ -874,7 +880,16 @@ public class AjustesActivity extends AppCompatActivity {
      * Intercambia el serverAuthCode por un access_token
      */
     private void intercambiarAuthCodePorToken(String serverAuthCode) {
+        // Bug 2 Fix: Validar que clientId no sea null antes de usarlo
         String clientId = getString(R.string.default_web_client_id);
+        if (clientId == null || clientId.isEmpty()) {
+            Logger.e("AjustesActivity", "Client ID no configurado o es null");
+            Toast.makeText(this, 
+                "Error: Client ID no configurado. Verifica la configuración de la app.",
+                Toast.LENGTH_LONG).show();
+            return;
+        }
+        
         // Intentar obtener client_secret (puede no estar configurado)
         String clientSecret = null;
         try {
