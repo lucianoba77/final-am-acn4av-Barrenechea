@@ -163,133 +163,17 @@ public class GoogleCalendarAuthService {
     }
     
     /**
-     * Renueva el token de acceso usando el refresh_token
-     * Consistente con React: calendarService.js - renovarTokenGoogle()
+     * Renueva el token de acceso
+     * Nota: El flujo implícito no proporciona refresh_token, así que cuando expire
+     * el usuario necesitará reconectar. Esto es más simple y no requiere backend.
      */
     private void renovarTokenGoogle(Map<String, Object> tokenDataAntiguo, FirestoreCallback callback) {
-        Object refreshTokenObj = tokenDataAntiguo.get("refresh_token");
-        if (refreshTokenObj == null) {
-            Log.d(TAG, "No hay refresh_token disponible para renovar");
-            if (callback != null) {
-                callback.onSuccess(null);
-            }
-            return;
+        // El flujo OAuth implícito no proporciona refresh_token
+        // Cuando el token expire, el usuario necesitará reconectar
+        Log.d(TAG, "Token expirado. El usuario necesitará reconectar Google Calendar.");
+        if (callback != null) {
+            callback.onSuccess(null); // Retornar null para indicar que necesita reconectar
         }
-        
-        String refreshToken = refreshTokenObj.toString();
-        
-        // Obtener client_id y client_secret desde SharedPreferences o recursos
-        SharedPreferences prefs = context.getSharedPreferences("ControlMedicamentos", Context.MODE_PRIVATE);
-        String clientId = prefs.getString("google_calendar_client_id", null);
-        String clientSecret = prefs.getString("google_calendar_client_secret", null);
-        
-        if (clientId == null || clientSecret == null) {
-            Log.e(TAG, "Client ID o Client Secret no configurados");
-            if (callback != null) {
-                callback.onError(new Exception("Configuración de Google Calendar incompleta"));
-            }
-            return;
-        }
-        
-        // Realizar petición para renovar el token usando OkHttpClient (ya usado en GoogleCalendarService)
-        // Esto evita crear threads manuales y maneja mejor el ciclo de vida
-        okhttp3.OkHttpClient httpClient = new okhttp3.OkHttpClient();
-        
-        okhttp3.MediaType mediaType = okhttp3.MediaType.parse("application/x-www-form-urlencoded; charset=utf-8");
-        String postData;
-        try {
-            postData = "client_id=" + java.net.URLEncoder.encode(clientId, "UTF-8") +
-                       "&client_secret=" + java.net.URLEncoder.encode(clientSecret, "UTF-8") +
-                       "&refresh_token=" + java.net.URLEncoder.encode(refreshToken, "UTF-8") +
-                       "&grant_type=refresh_token";
-        } catch (java.io.UnsupportedEncodingException e) {
-            Log.e(TAG, "Error al codificar datos para renovar token", e);
-            if (callback != null) {
-                callback.onError(new Exception("Error al preparar petición de renovación de token", e));
-            }
-            return;
-        }
-        
-        okhttp3.RequestBody body = okhttp3.RequestBody.create(mediaType, postData);
-        okhttp3.Request request = new okhttp3.Request.Builder()
-            .url("https://oauth2.googleapis.com/token")
-            .post(body)
-            .build();
-        
-        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onFailure(okhttp3.Call call, java.io.IOException e) {
-                Log.e(TAG, "Error al renovar token de Google Calendar", e);
-                if (callback != null) {
-                    callback.onError(e);
-                }
-            }
-            
-            @Override
-            public void onResponse(okhttp3.Call call, okhttp3.Response response) throws java.io.IOException {
-                try {
-                    if (response.isSuccessful() && response.body() != null) {
-                        String responseBody = response.body().string();
-                        
-                        // Parsear respuesta JSON
-                        org.json.JSONObject jsonResponse = new org.json.JSONObject(responseBody);
-                        String newAccessToken = jsonResponse.getString("access_token");
-                        long expiresIn = jsonResponse.optLong("expires_in", 3600);
-                        
-                        // Crear nuevo token data
-                        Map<String, Object> nuevoTokenData = new HashMap<>(tokenDataAntiguo);
-                        nuevoTokenData.put("access_token", newAccessToken);
-                        nuevoTokenData.put("expires_in", expiresIn);
-                        
-                        // Actualizar fecha de obtención
-                        SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-                        isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                        nuevoTokenData.put("fechaObtencion", isoFormat.format(new Date()));
-                        
-                        // Guardar el nuevo token
-                        guardarTokenGoogle(nuevoTokenData, new FirestoreCallback() {
-                            @Override
-                            public void onSuccess(Object result) {
-                                Log.d(TAG, "Token renovado y guardado exitosamente");
-                                if (callback != null) {
-                                    callback.onSuccess(nuevoTokenData);
-                                }
-                            }
-                            
-                            @Override
-                            public void onError(Exception exception) {
-                                Log.e(TAG, "Error al guardar token renovado", exception);
-                                if (callback != null) {
-                                    callback.onError(exception);
-                                }
-                            }
-                        });
-                    } else {
-                        String errorMessage = "Error al renovar token: " + response.code();
-                        if (response.body() != null) {
-                            try {
-                                errorMessage += " - " + response.body().string();
-                            } catch (Exception e) {
-                                // Ignorar error al leer body
-                            }
-                        }
-                        Log.e(TAG, errorMessage);
-                        if (callback != null) {
-                            callback.onError(new Exception(errorMessage));
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Error al procesar respuesta de renovación de token", e);
-                    if (callback != null) {
-                        callback.onError(e);
-                    }
-                } finally {
-                    if (response != null && response.body() != null) {
-                        response.body().close();
-                    }
-                }
-            }
-        });
     }
     
     /**
@@ -374,6 +258,7 @@ public class GoogleCalendarAuthService {
     public void tieneGoogleCalendarConectado(FirestoreCallback callback) {
         FirebaseUser firebaseUser = authService.getCurrentUser();
         if (firebaseUser == null) {
+            Log.d(TAG, "tieneGoogleCalendarConectado: Usuario no autenticado");
             if (callback != null) {
                 callback.onSuccess(false);
             }
@@ -381,6 +266,7 @@ public class GoogleCalendarAuthService {
         }
         
         String userId = firebaseUser.getUid();
+        Log.d(TAG, "tieneGoogleCalendarConectado: Verificando token para userId: " + userId);
         
         // Verificar directamente en Firestore si existe un token
         // sin intentar renovarlo (para evitar eliminarlo si está expirado)
@@ -390,10 +276,21 @@ public class GoogleCalendarAuthService {
             .addOnCompleteListener(task -> {
                 if (task.isSuccessful()) {
                     DocumentSnapshot document = task.getResult();
-                    boolean conectado = document != null && 
-                                      document.exists() && 
-                                      document.getData() != null &&
-                                      document.getData().containsKey("access_token");
+                    boolean existeDocumento = document != null && document.exists();
+                    boolean tieneAccessToken = false;
+                    
+                    if (existeDocumento && document.getData() != null) {
+                        Map<String, Object> data = document.getData();
+                        tieneAccessToken = data.containsKey("access_token");
+                        Log.d(TAG, "tieneGoogleCalendarConectado: Documento existe: " + existeDocumento + 
+                              ", tiene access_token: " + tieneAccessToken + 
+                              ", keys: " + (data != null ? data.keySet().toString() : "null"));
+                    } else {
+                        Log.d(TAG, "tieneGoogleCalendarConectado: Documento no existe o data es null");
+                    }
+                    
+                    boolean conectado = existeDocumento && tieneAccessToken;
+                    Log.d(TAG, "tieneGoogleCalendarConectado: Resultado final: " + conectado);
                     
                     if (callback != null) {
                         callback.onSuccess(conectado);

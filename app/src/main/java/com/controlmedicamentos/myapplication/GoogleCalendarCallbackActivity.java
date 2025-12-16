@@ -97,61 +97,22 @@ public class GoogleCalendarCallbackActivity extends AppCompatActivity {
             return;
         }
         
-        // Verificar que el usuario esté autenticado
-        FirebaseUser currentUser = authService.getCurrentUser();
-        if (currentUser == null) {
-            Log.e(TAG, "Usuario no autenticado");
-            mostrarErrorYRegresar("Sesión no disponible. Por favor, inicia sesión nuevamente.");
-            return;
+        // Obtener el state de la URL (contiene la acción: "create" o "delete")
+        String state = data.getQueryParameter("state");
+        if (state == null && data.getFragment() != null) {
+            Map<String, String> fragmentParams = parseFragment(data.getFragment());
+            state = fragmentParams.get("state");
         }
         
-        String userId = currentUser.getUid();
+        Log.d(TAG, "Callback OAuth recibido. State: " + state);
         
-        // Preparar los datos del token para guardar
-        Map<String, Object> tokenData = new HashMap<>();
-        tokenData.put("access_token", accessToken);
-        tokenData.put("token_type", tokenType != null ? tokenType : "Bearer");
-        tokenData.put("expires_in", expiresIn != null ? Integer.parseInt(expiresIn) : 3600);
-        tokenData.put("fechaObtencion", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
-        
-        // Calcular fecha de expiración
-        int expiresInSeconds = expiresIn != null ? Integer.parseInt(expiresIn) : 3600;
-        long expirationTime = System.currentTimeMillis() + (expiresInSeconds * 1000L);
-        tokenData.put("fechaExpiracion", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date(expirationTime)));
-        
-        // Guardar el token en Firestore
-        googleCalendarAuthService.guardarTokenGoogle(tokenData, 
-            new GoogleCalendarAuthService.FirestoreCallback() {
-                @Override
-                public void onSuccess(Object result) {
-                    Log.d(TAG, "Token de Google Calendar guardado exitosamente");
-                    
-                    // Esperar un momento para asegurar que el token se haya guardado en Firestore
-                    // antes de regresar a AjustesActivity
-                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(GoogleCalendarCallbackActivity.this, 
-                                "Google Calendar conectado exitosamente", 
-                                Toast.LENGTH_SHORT).show();
-                            
-                            // Regresar a AjustesActivity con flag para indicar que se conectó exitosamente
-                            Intent ajustesIntent = new Intent(GoogleCalendarCallbackActivity.this, AjustesActivity.class);
-                            ajustesIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                            ajustesIntent.putExtra("google_calendar_conectado", true);
-                            startActivity(ajustesIntent);
-                            finish();
-                        }
-                    }, 500); // Esperar 500ms para que Firestore complete la escritura
-                }
-                
-                @Override
-                public void onError(Exception exception) {
-                    Log.e(TAG, "Error al guardar token de Google Calendar", exception);
-                    mostrarErrorYRegresar("Error al guardar el token: " + 
-                        (exception != null ? exception.getMessage() : "Error desconocido"));
-                }
-            });
+        // Procesar con el helper de autorización bajo demanda
+        // Este helper ejecutará la acción (crear o eliminar eventos) y luego cerrará esta Activity
+        com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper.procesarCallbackOAuth(
+            this, 
+            accessToken, 
+            state
+        );
     }
     
     /**

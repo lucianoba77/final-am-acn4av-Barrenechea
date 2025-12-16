@@ -84,3 +84,6 @@ lint/reports/
 *.md
 !README.md
 node_modules
+log2.logcat
+log3.logcat
+COMANDOS_COPIAR_PEGAR.txt
