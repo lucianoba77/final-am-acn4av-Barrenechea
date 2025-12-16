@@ -207,4 +207,3 @@ exports.refrescarGoogleCalendarToken = functions.https.onCall(async (data, conte
     );
   }
 });
-

@@ -68,22 +68,46 @@ public class GoogleCalendarSyncHelper {
      * Obtiene los eventoIds directamente desde Firestore.
      */
     private void obtenerEventoIdsDesdeFirestore(String medicamentoId, EventoIdsCallback callback) {
+        Logger.d("GoogleCalendarSyncHelper", "obtenerEventoIdsDesdeFirestore: Obteniendo eventoIds para medicamento: " + medicamentoId);
         firebaseService.obtenerMedicamentoDocumento(medicamentoId, new FirebaseService.FirestoreDocumentCallback() {
             @Override
             public void onSuccess(DocumentSnapshot document) {
                 List<String> eventoIds = new ArrayList<>();
                 if (document != null && document.exists()) {
                     Object eventoIdsObj = document.get("eventoIdsGoogleCalendar");
+                    Logger.d("GoogleCalendarSyncHelper", 
+                        "obtenerEventoIdsDesdeFirestore: eventoIdsObj tipo: " + 
+                        (eventoIdsObj != null ? eventoIdsObj.getClass().getSimpleName() : "null"));
+                    
                     if (eventoIdsObj instanceof List) {
                         @SuppressWarnings("unchecked")
                         List<Object> eventoIdsList = (List<Object>) eventoIdsObj;
+                        Logger.d("GoogleCalendarSyncHelper", 
+                            "obtenerEventoIdsDesdeFirestore: Lista encontrada con " + eventoIdsList.size() + " elementos");
                         for (Object eventoIdObj : eventoIdsList) {
                             if (eventoIdObj instanceof String) {
                                 eventoIds.add((String) eventoIdObj);
+                            } else {
+                                Logger.w("GoogleCalendarSyncHelper", 
+                                    "obtenerEventoIdsDesdeFirestore: Elemento no es String: " + 
+                                    (eventoIdObj != null ? eventoIdObj.getClass().getSimpleName() : "null"));
                             }
                         }
+                    } else if (eventoIdsObj != null) {
+                        Logger.w("GoogleCalendarSyncHelper", 
+                            "obtenerEventoIdsDesdeFirestore: eventoIdsGoogleCalendar no es una List, es: " + 
+                            eventoIdsObj.getClass().getSimpleName());
+                    } else {
+                        Logger.d("GoogleCalendarSyncHelper", 
+                            "obtenerEventoIdsDesdeFirestore: eventoIdsGoogleCalendar es null o no existe");
                     }
+                } else {
+                    Logger.w("GoogleCalendarSyncHelper", 
+                        "obtenerEventoIdsDesdeFirestore: Documento no existe para medicamento: " + medicamentoId);
                 }
+                
+                Logger.d("GoogleCalendarSyncHelper", 
+                    "obtenerEventoIdsDesdeFirestore: Total eventoIds obtenidos: " + eventoIds.size());
                 if (callback != null) {
                     callback.onSuccess(eventoIds);
                 }

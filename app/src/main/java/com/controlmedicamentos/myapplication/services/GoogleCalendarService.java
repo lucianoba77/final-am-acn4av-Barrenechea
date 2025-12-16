@@ -405,17 +405,14 @@ public class GoogleCalendarService {
     }
     
     /**
-     * Crea eventos recurrentes para todas las tomas de un medicamento usando RRULE.
-     * Para medicamentos crónicos, crea eventos recurrentes sin fecha de fin.
-     * Para medicamentos con fin, crea eventos recurrentes hasta la fecha de fin.
+     * Crea eventos recurrentes para todas las tomas de un medicamento.
      * 
-     * IMPORTANTE: Usa eventos recurrentes reales (RRULE) en lugar de eventos individuales
-     * para respetar los límites de cuota de Google Calendar API para apps no verificadas.
+     * ESTRATEGIA: Primero intenta usar RRULE (más eficiente). Si falla, crea eventos individuales.
      * 
-     * Límites respetados:
-     * - Máximo 10 eventos recurrentes por medicamento (uno por cada horario de toma)
-     * - Rate limiting: 50 requests por minuto
-     * - Retry con backoff exponencial para errores de cuota
+     * Límites para apps no verificadas:
+     * - 60 requests por minuto por usuario
+     * - 1,000,000 requests por día por proyecto
+     * - Rate limiting: 1.2 segundos entre requests (~50 requests/minuto)
      */
     public void crearEventosRecurrentes(String accessToken, Medicamento medicamento, 
                                        RecurrentEventsCallback callback) {
@@ -469,68 +466,183 @@ public class GoogleCalendarService {
         final int[] eventosPendientes = {maxEventos};
         final List<Exception> errores = new ArrayList<>();
         
-        // Crear un evento recurrente por cada horario de toma
-        for (int i = 0; i < maxEventos; i++) {
-            String horaToma = horasToma.get(i);
-            
-            // Esperar entre solicitudes para respetar rate limiting
-            if (i > 0) {
-                long waitTime = GoogleCalendarQuotaManager.getWaitTimeMs(userId);
-                try {
-                    Thread.sleep(waitTime);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+        Logger.d(TAG, "crearEventosRecurrentes: Iniciando creación de " + maxEventos + " eventos para medicamento: " + 
+            (medicamento.getNombre() != null ? medicamento.getNombre() : "SIN_NOMBRE") + 
+            " (Tomas diarias: " + medicamento.getTomasDiarias() + ", Horarios: " + horasToma.toString() + ")");
+        
+        // Crear eventos de forma asíncrona secuencial usando Handler
+        // Esto evita bloquear el hilo y permite crear múltiples eventos correctamente
+        final int[] indiceActual = {0};
+        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        
+        // Función recursiva para crear eventos secuencialmente
+        // Usar array para permitir referencia dentro de la definición
+        final Runnable[] crearSiguienteEventoRef = new Runnable[1];
+        Runnable crearSiguienteEvento = new Runnable() {
+            @Override
+            public void run() {
+                if (indiceActual[0] >= maxEventos) {
+                    // Ya se crearon todos los eventos
+                    return;
                 }
-            }
-            
-            crearEventoRecurrente(accessToken, medicamento, horaToma, 
-                new CalendarCallback() {
-                    @Override
-                    public void onSuccess(String eventoId, Object evento) {
-                        eventoIds.add(eventoId);
-                        eventosCreados[0]++;
-                        eventosPendientes[0]--;
-                        GoogleCalendarQuotaManager.recordRequest(userId);
-                        
-                        if (eventosPendientes[0] == 0) {
-                            if (callback != null) {
-                                if (errores.isEmpty()) {
-                                    callback.onSuccess(eventoIds);
-                                } else {
-                                    // Algunos eventos se crearon, otros fallaron
-                                    Logger.w(TAG, "Algunos eventos recurrentes no se pudieron crear: " + errores.size());
-                                    callback.onSuccess(eventoIds); // Retornar los que se crearon
+                
+                final int indice = indiceActual[0];
+                final String horaToma = horasToma.get(indice);
+                Logger.d(TAG, "crearEventosRecurrentes: Creando evento " + (indice + 1) + "/" + maxEventos + " para hora: " + horaToma);
+                
+                crearEventoRecurrente(accessToken, medicamento, horaToma, 
+                    new CalendarCallback() {
+                        @Override
+                        public void onSuccess(String eventoId, Object evento) {
+                            Logger.d(TAG, "crearEventosRecurrentes: Evento creado exitosamente - ID: " + eventoId + 
+                                " para hora: " + horaToma + " (Creados: " + (eventosCreados[0] + 1) + "/" + maxEventos + ")");
+                            eventoIds.add(eventoId);
+                            eventosCreados[0]++;
+                            eventosPendientes[0]--;
+                            GoogleCalendarQuotaManager.recordRequest(userId);
+                            
+                            Logger.d(TAG, "crearEventosRecurrentes: Pendientes: " + eventosPendientes[0] + ", Creados: " + eventosCreados[0]);
+                            
+                            // Crear el siguiente evento después de un delay para rate limiting
+                            indiceActual[0]++;
+                            if (indiceActual[0] < maxEventos) {
+                                long waitTime = GoogleCalendarQuotaManager.getWaitTimeMs(userId);
+                                handler.postDelayed(crearSiguienteEventoRef[0], waitTime);
+                            } else {
+                                // Todos los eventos fueron procesados
+                                // Verificar si todos los eventos fueron procesados (exitosos o con error)
+                                if (eventosCreados[0] + errores.size() >= maxEventos || eventosPendientes[0] == 0) {
+                                    Logger.d(TAG, "crearEventosRecurrentes: Todos los eventos completados. Total creados: " + eventoIds.size() + 
+                                        ", Errores: " + errores.size());
+                                    if (callback != null) {
+                                        if (errores.isEmpty()) {
+                                            callback.onSuccess(eventoIds);
+                                        } else {
+                                            // Algunos eventos se crearon, otros fallaron
+                                            Logger.w(TAG, "Algunos eventos recurrentes no se pudieron crear: " + errores.size() + 
+                                                " errores de " + maxEventos + " eventos");
+                                            callback.onSuccess(eventoIds); // Retornar los que se crearon
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
                     
                     @Override
                     public void onError(Exception exception) {
+                        Logger.e(TAG, "crearEventosRecurrentes: Error al crear evento para hora " + horaToma + 
+                            " (Pendientes: " + (eventosPendientes[0] - 1) + "/" + maxEventos + ")", exception);
+                        
+                        // Si es error de RRULE inválida, intentar crear eventos individuales como fallback
+                        String errorMsg = exception.getMessage() != null ? exception.getMessage() : "";
+                        if (errorMsg.contains("Invalid recurrence rule") || (errorMsg.contains("400") && errorMsg.contains("recurrence"))) {
+                            Logger.w(TAG, "Error de RRULE inválida, intentando crear eventos individuales como fallback...");
+                            // Usar un callback wrapper para manejar el resultado del fallback
+                            crearEventosIndividualesComoFallback(accessToken, medicamento, horaToma, new CalendarCallback() {
+                                @Override
+                                public void onSuccess(String eventoId, Object evento) {
+                                    // El fallback retorna el primer eventoId en el primer parámetro
+                                    // y la lista completa de eventoIds en el segundo parámetro (si es una List)
+                                    List<String> todosLosEventoIds = new ArrayList<>();
+                                    if (eventoId != null) {
+                                        todosLosEventoIds.add(eventoId);
+                                    }
+                                    // Si el segundo parámetro es una List, agregar todos los IDs
+                                    if (evento instanceof List) {
+                                        @SuppressWarnings("unchecked")
+                                        List<String> eventoIdsList = (List<String>) evento;
+                                        todosLosEventoIds.addAll(eventoIdsList);
+                                    }
+                                    
+                                    // Agregar todos los eventoIds a la lista principal
+                                    eventoIds.addAll(todosLosEventoIds);
+                                    eventosCreados[0] += todosLosEventoIds.size();
+                                    eventosPendientes[0]--;
+                                    GoogleCalendarQuotaManager.recordRequest(userId);
+                                    
+                                    Logger.d(TAG, "Fallback: " + todosLosEventoIds.size() + 
+                                        " eventos individuales creados. Pendientes: " + eventosPendientes[0]);
+                                    
+                                    // Continuar con el siguiente evento después del fallback
+                                    indiceActual[0]++;
+                                    if (indiceActual[0] < maxEventos) {
+                                        long waitTime = GoogleCalendarQuotaManager.getWaitTimeMs(userId);
+                                        handler.postDelayed(crearSiguienteEventoRef[0], waitTime);
+                                    } else {
+                                        // Todos los eventos fueron procesados
+                                        if (eventosPendientes[0] == 0) {
+                                            if (callback != null) {
+                                                callback.onSuccess(eventoIds);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                @Override
+                                public void onError(Exception exception) {
+                                    eventosPendientes[0]--;
+                                    errores.add(exception);
+                                    GoogleCalendarQuotaManager.recordRequest(userId);
+                                    
+                                    Logger.w(TAG, "Fallback también falló para " + horaToma);
+                                    
+                                    // Continuar con el siguiente evento aunque el fallback falló
+                                    indiceActual[0]++;
+                                    if (indiceActual[0] < maxEventos) {
+                                        long waitTime = GoogleCalendarQuotaManager.getWaitTimeMs(userId);
+                                        handler.postDelayed(crearSiguienteEventoRef[0], waitTime);
+                                    } else {
+                                        // Todos los eventos fueron procesados
+                                        if (eventosPendientes[0] == 0) {
+                                            if (callback != null) {
+                                                if (eventoIds.isEmpty()) {
+                                                    callback.onError(new Exception("No se pudieron crear los eventos"));
+                                                } else {
+                                                    callback.onSuccess(eventoIds);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                            return; // No decrementar contadores aquí, el fallback lo hará
+                        }
+                        
                         eventosPendientes[0]--;
                         errores.add(exception);
                         GoogleCalendarQuotaManager.recordRequest(userId);
                         
-                        // Si es error de cuota, intentar retry con backoff
-                        if (GoogleCalendarQuotaManager.isQuotaExceededError(exception)) {
-                            Logger.w(TAG, "Error de cuota al crear evento recurrente, reintentando...");
-                            reintentarCrearEventoRecurrente(accessToken, medicamento, horaToma, 1, this);
+                        // Continuar con el siguiente evento aunque hubo un error
+                        indiceActual[0]++;
+                        if (indiceActual[0] < maxEventos) {
+                            long waitTime = GoogleCalendarQuotaManager.getWaitTimeMs(userId);
+                            handler.postDelayed(crearSiguienteEventoRef[0], waitTime);
                         } else {
-                            Logger.w(TAG, "Error al crear evento recurrente para " + horaToma, exception);
-                        }
-                        
-                        if (eventosPendientes[0] == 0) {
-                            if (callback != null) {
-                                if (eventoIds.isEmpty()) {
-                                    callback.onError(new Exception("No se pudieron crear los eventos recurrentes"));
-                                } else {
-                                    callback.onSuccess(eventoIds); // Retornar los que se crearon
+                            // Todos los eventos fueron procesados
+                            if (eventosPendientes[0] == 0) {
+                                Logger.d(TAG, "crearEventosRecurrentes: Todos los eventos procesados (con errores). " +
+                                    "Creados: " + eventoIds.size() + ", Errores: " + errores.size());
+                                if (callback != null) {
+                                    if (eventoIds.isEmpty()) {
+                                        callback.onError(new Exception("No se pudieron crear los eventos recurrentes"));
+                                    } else {
+                                        Logger.w(TAG, "crearEventosRecurrentes: Retornando " + eventoIds.size() + 
+                                            " eventos creados (algunos fallaron)");
+                                        callback.onSuccess(eventoIds); // Retornar los que se crearon
+                                    }
                                 }
                             }
                         }
                     }
                 }, 0); // Primer intento
-        }
+            }
+        };
+        
+        // Asignar la referencia para poder usarla dentro de la definición
+        crearSiguienteEventoRef[0] = crearSiguienteEvento;
+        
+        // Iniciar la creación del primer evento
+        handler.post(crearSiguienteEvento);
     }
     
     /**
@@ -550,15 +662,19 @@ public class GoogleCalendarService {
             int hora = Integer.parseInt(partesHora[0]);
             int minuto = Integer.parseInt(partesHora[1]);
             
-            // Fecha de inicio: hoy a la hora especificada
-            Calendar fechaInicio = Calendar.getInstance();
+            // Fecha de inicio: hoy a la hora especificada en zona horaria de Argentina
+            java.util.TimeZone tzArgentina = java.util.TimeZone.getTimeZone("America/Argentina/Buenos_Aires");
+            Calendar fechaInicio = Calendar.getInstance(tzArgentina);
             fechaInicio.set(Calendar.HOUR_OF_DAY, hora);
             fechaInicio.set(Calendar.MINUTE, minuto);
             fechaInicio.set(Calendar.SECOND, 0);
             fechaInicio.set(Calendar.MILLISECOND, 0);
             
+            // Comparar con la hora actual en la misma zona horaria
+            Calendar ahora = Calendar.getInstance(tzArgentina);
+            
             // Si la hora ya pasó hoy, empezar mañana
-            if (fechaInicio.before(Calendar.getInstance())) {
+            if (fechaInicio.before(ahora)) {
                 fechaInicio.add(Calendar.DAY_OF_YEAR, 1);
             }
             
@@ -567,31 +683,41 @@ public class GoogleCalendarService {
             fechaFin.add(Calendar.MINUTE, 15);
             
             // Calcular fecha de fin de la recurrencia
-            Calendar fechaFinRecurrencia = null;
             String rrule;
             
             if (medicamento.getDiasTratamiento() == -1) {
                 // Medicamento crónico: recurrencia diaria sin fecha de fin
-                rrule = "FREQ=DAILY;INTERVAL=1";
+                rrule = "FREQ=DAILY";
+                Logger.d(TAG, "RRULE generada: " + rrule + " (medicamento crónico)");
             } else {
-                // Medicamento con fin: recurrencia diaria hasta fecha de fin
-                fechaFinRecurrencia = (Calendar) fechaInicio.clone();
-                fechaFinRecurrencia.add(Calendar.DAY_OF_YEAR, medicamento.getDiasTratamiento());
-                
-                SimpleDateFormat rfcFormat = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US);
-                rfcFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                String until = rfcFormat.format(fechaFinRecurrencia.getTime());
-                
-                rrule = "FREQ=DAILY;INTERVAL=1;UNTIL=" + until;
+                // Medicamento con fin: usar COUNT en lugar de UNTIL para evitar problemas de formato
+                // COUNT especifica el número de ocurrencias del evento
+                // Si el tratamiento dura N días, habrá N ocurrencias (una por día)
+                int count = medicamento.getDiasTratamiento();
+                rrule = "FREQ=DAILY;COUNT=" + count;
+                Logger.d(TAG, "RRULE generada: " + rrule + " (días tratamiento: " + medicamento.getDiasTratamiento() + 
+                    ", count: " + count + ")");
             }
             
-            String timeZone = java.util.TimeZone.getDefault().getID();
+            // Usar zona horaria de Argentina (America/Argentina/Buenos_Aires, UTC-3)
+            String timeZone = "America/Argentina/Buenos_Aires";
             SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
+            isoFormat.setTimeZone(java.util.TimeZone.getTimeZone(timeZone));
+            
+            // Verificar que el medicamento tenga nombre
+            String nombreMedicamento = medicamento.getNombre();
+            if (nombreMedicamento == null || nombreMedicamento.isEmpty()) {
+                nombreMedicamento = "Medicamento sin nombre";
+                Logger.w(TAG, "crearEventoRecurrente: Medicamento sin nombre, usando valor por defecto");
+            }
+            
+            Logger.d(TAG, "crearEventoRecurrente: Creando evento para medicamento: '" + nombreMedicamento + 
+                "' a las " + horaToma);
             
             // Crear objeto JSON del evento recurrente
             JSONObject evento = new JSONObject();
-            evento.put("summary", "💊 " + medicamento.getNombre());
-            evento.put("description", "Toma de " + medicamento.getNombre() + "\n" +
+            evento.put("summary", "💊 " + nombreMedicamento);
+            evento.put("description", "Toma de " + nombreMedicamento + "\n" +
                        "Presentación: " + medicamento.getPresentacion() + "\n" +
                        "Condición: " + (medicamento.getAfeccion() != null ? medicamento.getAfeccion() : "N/A") + "\n" +
                        "Stock: " + medicamento.getStockActual() + "/" + 
@@ -607,9 +733,9 @@ public class GoogleCalendarService {
             end.put("timeZone", timeZone);
             evento.put("end", end);
             
-            // Agregar recurrencia (RRULE)
+            // Agregar recurrencia (RRULE) - El prefijo "RRULE:" es requerido por Google Calendar API
             JSONArray recurrence = new JSONArray();
-            recurrence.put(rrule);
+            recurrence.put("RRULE:" + rrule);
             evento.put("recurrence", recurrence);
             
             // Recordatorios
@@ -630,7 +756,10 @@ public class GoogleCalendarService {
             evento.put("colorId", obtenerColorId(medicamento.getColor()));
             
             // Crear request
-            RequestBody body = RequestBody.create(evento.toString(), JSON);
+            String jsonEvento = evento.toString();
+            Logger.d(TAG, "crearEventoRecurrente: JSON del evento a enviar (summary: '" + 
+                evento.optString("summary", "NO_SUMMARY") + "'): " + jsonEvento);
+            RequestBody body = RequestBody.create(jsonEvento, JSON);
             Request request = new Request.Builder()
                 .url(CALENDAR_API_BASE_URL)
                 .addHeader("Authorization", "Bearer " + accessToken)
@@ -683,6 +812,204 @@ public class GoogleCalendarService {
             
         } catch (Exception e) {
             Log.e(TAG, "Error al crear evento recurrente en Google Calendar", e);
+            if (callback != null) {
+                callback.onError(e);
+            }
+        }
+    }
+    
+    /**
+     * Crea eventos individuales como fallback cuando las RRULE fallan.
+     * Crea un evento por cada día del tratamiento con rate limiting adecuado.
+     */
+    private void crearEventosIndividualesComoFallback(String accessToken, Medicamento medicamento, 
+                                                      String horaToma, CalendarCallback callback) {
+        Logger.w(TAG, "crearEventosIndividualesComoFallback: Creando eventos individuales para " + 
+            horaToma + " (días: " + medicamento.getDiasTratamiento() + ")");
+        
+        java.util.TimeZone tzArgentina = java.util.TimeZone.getTimeZone("America/Argentina/Buenos_Aires");
+        Calendar fechaInicio = Calendar.getInstance(tzArgentina);
+        
+        // Parsear hora
+        String[] partesHora = horaToma.split(":");
+        int hora = Integer.parseInt(partesHora[0]);
+        int minuto = Integer.parseInt(partesHora[1]);
+        
+        fechaInicio.set(Calendar.HOUR_OF_DAY, hora);
+        fechaInicio.set(Calendar.MINUTE, minuto);
+        fechaInicio.set(Calendar.SECOND, 0);
+        fechaInicio.set(Calendar.MILLISECOND, 0);
+        
+        Calendar ahora = Calendar.getInstance(tzArgentina);
+        if (fechaInicio.before(ahora)) {
+            fechaInicio.add(Calendar.DAY_OF_YEAR, 1);
+        }
+        
+        // Calcular número de eventos a crear
+        int numEventos = medicamento.getDiasTratamiento() == -1 ? 365 : medicamento.getDiasTratamiento();
+        numEventos = Math.min(numEventos, 100); // Limitar a 100 eventos máximo para no exceder cuota
+        
+        final int[] eventosCreados = {0};
+        final int[] eventosPendientes = {numEventos};
+        final List<String> eventoIds = new ArrayList<>();
+        final String userId = obtenerUserId();
+        
+        // Crear eventos individuales con rate limiting
+        for (int i = 0; i < numEventos; i++) {
+            final int dia = i;
+            final Calendar fechaEvento = (Calendar) fechaInicio.clone();
+            fechaEvento.add(Calendar.DAY_OF_YEAR, dia);
+            
+            // Esperar entre solicitudes para respetar rate limiting
+            if (dia > 0) {
+                long waitTime = GoogleCalendarQuotaManager.getWaitTimeMs(userId);
+                try {
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            
+            // Crear evento individual
+            crearEventoIndividual(accessToken, medicamento, fechaEvento, new CalendarCallback() {
+                @Override
+                public void onSuccess(String eventoId, Object evento) {
+                    eventoIds.add(eventoId);
+                    eventosCreados[0]++;
+                    eventosPendientes[0]--;
+                    GoogleCalendarQuotaManager.recordRequest(userId);
+                    
+                    if (eventosPendientes[0] == 0) {
+                        Logger.d(TAG, "crearEventosIndividualesComoFallback: Todos los eventos creados: " + eventoIds.size());
+                        if (callback != null) {
+                            // Retornar solo el primer evento ID para mantener compatibilidad
+                            callback.onSuccess(eventoIds.isEmpty() ? null : eventoIds.get(0), eventoIds);
+                        }
+                    }
+                }
+                
+                @Override
+                public void onError(Exception exception) {
+                    eventosPendientes[0]--;
+                    GoogleCalendarQuotaManager.recordRequest(userId);
+                    Logger.w(TAG, "Error al crear evento individual día " + dia, exception);
+                    
+                    if (eventosPendientes[0] == 0) {
+                        if (callback != null) {
+                            if (eventoIds.isEmpty()) {
+                                callback.onError(new Exception("No se pudieron crear eventos individuales"));
+                            } else {
+                                callback.onSuccess(eventoIds.get(0), eventoIds);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Crea un evento individual (sin recurrencia) para una fecha específica.
+     */
+    private void crearEventoIndividual(String accessToken, Medicamento medicamento, Calendar fechaEvento, 
+                                      CalendarCallback callback) {
+        try {
+            Calendar fechaFin = (Calendar) fechaEvento.clone();
+            fechaFin.add(Calendar.MINUTE, 15);
+            
+            String timeZone = "America/Argentina/Buenos_Aires";
+            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
+            isoFormat.setTimeZone(java.util.TimeZone.getTimeZone(timeZone));
+            
+            String nombreMedicamento = medicamento.getNombre();
+            if (nombreMedicamento == null || nombreMedicamento.isEmpty()) {
+                nombreMedicamento = "Medicamento sin nombre";
+            }
+            
+            JSONObject evento = new JSONObject();
+            evento.put("summary", "💊 " + nombreMedicamento);
+            evento.put("description", "Toma de " + nombreMedicamento + "\n" +
+                       "Presentación: " + medicamento.getPresentacion() + "\n" +
+                       "Condición: " + (medicamento.getAfeccion() != null ? medicamento.getAfeccion() : "N/A") + "\n" +
+                       "Stock: " + medicamento.getStockActual() + "/" + 
+                       (medicamento.getDiasTratamiento() > 0 ? medicamento.getDiasTratamiento() : medicamento.getStockInicial()));
+            
+            JSONObject start = new JSONObject();
+            start.put("dateTime", isoFormat.format(fechaEvento.getTime()));
+            start.put("timeZone", timeZone);
+            evento.put("start", start);
+            
+            JSONObject end = new JSONObject();
+            end.put("dateTime", isoFormat.format(fechaFin.getTime()));
+            end.put("timeZone", timeZone);
+            evento.put("end", end);
+            
+            // Recordatorios
+            JSONObject reminders = new JSONObject();
+            reminders.put("useDefault", false);
+            JSONArray overrides = new JSONArray();
+            JSONObject reminder1 = new JSONObject();
+            reminder1.put("method", "popup");
+            reminder1.put("minutes", 15);
+            overrides.put(reminder1);
+            JSONObject reminder2 = new JSONObject();
+            reminder2.put("method", "popup");
+            reminder2.put("minutes", 5);
+            overrides.put(reminder2);
+            reminders.put("overrides", overrides);
+            evento.put("reminders", reminders);
+            
+            evento.put("colorId", obtenerColorId(medicamento.getColor()));
+            
+            // Crear request
+            RequestBody body = RequestBody.create(evento.toString(), JSON);
+            Request request = new Request.Builder()
+                .url(CALENDAR_API_BASE_URL)
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .addHeader("Content-Type", "application/json")
+                .post(body)
+                .build();
+            
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "Error al crear evento individual", e);
+                    if (callback != null) {
+                        callback.onError(e);
+                    }
+                }
+                
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    if (!response.isSuccessful()) {
+                        String errorBody = response.body() != null ? response.body().string() : "Error desconocido";
+                        Log.e(TAG, "Error al crear evento individual: " + response.code() + " - " + errorBody);
+                        if (callback != null) {
+                            callback.onError(new Exception("Error al crear evento: " + errorBody));
+                        }
+                        return;
+                    }
+                    
+                    try {
+                        String responseBody = response.body() != null ? response.body().string() : "{}";
+                        JSONObject eventoCreado = new JSONObject(responseBody);
+                        String eventoId = eventoCreado.getString("id");
+                        
+                        Log.d(TAG, "Evento individual creado exitosamente: " + eventoId);
+                        if (callback != null) {
+                            callback.onSuccess(eventoId, eventoCreado);
+                        }
+                    } catch (JSONException e) {
+                        Log.e(TAG, "Error al parsear respuesta", e);
+                        if (callback != null) {
+                            callback.onError(e);
+                        }
+                    }
+                }
+            });
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error al crear evento individual", e);
             if (callback != null) {
                 callback.onError(e);
             }

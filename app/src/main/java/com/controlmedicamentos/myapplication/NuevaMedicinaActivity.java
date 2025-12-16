@@ -242,7 +242,22 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 return;
             }
 
-            Medicamento medicamento = crearMedicamento();
+            Medicamento medicamento;
+            try {
+                medicamento = crearMedicamento();
+            } catch (Exception e) {
+                Logger.e("NuevaMedicinaActivity", "Error al crear medicamento", e);
+                Toast.makeText(this, "Error al crear el medicamento: " + 
+                    (e.getMessage() != null ? e.getMessage() : "Error desconocido"), 
+                    Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            if (medicamento == null) {
+                Logger.e("NuevaMedicinaActivity", "Medicamento es null después de crearMedicamento()");
+                Toast.makeText(this, "Error: No se pudo crear el medicamento", Toast.LENGTH_LONG).show();
+                return;
+            }
 
             if (esEdicion && medicamentoEditar != null) {
                 // Actualizar medicamento existente
@@ -279,7 +294,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                             alarmScheduler.programarAlarmasMedicamento(medicamentoActualizado);
                         }
                         Toast.makeText(NuevaMedicinaActivity.this, "Medicamento actualizado exitosamente", Toast.LENGTH_SHORT).show();
-                        finish(); // Cerrar actividad
+                        irAMainActivity(); // Redirigir al dashboard
                     }
 
                     @Override
@@ -302,7 +317,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                             sincronizarConGoogleCalendar(medicamentoGuardado);
                         }
                         Toast.makeText(NuevaMedicinaActivity.this, "Medicamento guardado exitosamente", Toast.LENGTH_SHORT).show();
-                        finish(); // Cerrar actividad
+                        irAMainActivity(); // Redirigir al dashboard
                     }
 
                     @Override
@@ -312,6 +327,16 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 });
             }
         }
+    }
+    
+    /**
+     * Redirige al dashboard (MainActivity)
+     */
+    private void irAMainActivity() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish(); // Cerrar NuevaMedicinaActivity
     }
     
     /**
@@ -416,22 +441,28 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             tilAfeccion.setError(null);
         }
 
-        if (TextUtils.isEmpty(etTomasDiarias.getText())) {
-            tilTomasDiarias.setError("Las tomas diarias son requeridas");
-            valido = false;
-        } else {
-            tilTomasDiarias.setError(null);
-        }
-
-        // Validar horario solo si tomas diarias > 0
+        // Validar tomas diarias (puede estar vacío para medicamentos ocasionales)
         int tomasDiarias = 0;
         if (!TextUtils.isEmpty(etTomasDiarias.getText())) {
             try {
                 tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
+                if (tomasDiarias < 0) {
+                    tilTomasDiarias.setError("Las tomas diarias no pueden ser negativas");
+                    valido = false;
+                } else {
+                    tilTomasDiarias.setError(null);
+                }
             } catch (NumberFormatException e) {
-                // Ya se validará arriba
+                tilTomasDiarias.setError("Ingresa un número válido");
+                valido = false;
             }
+        } else {
+            // Campo vacío = medicamento ocasional (tomasDiarias = 0)
+            tilTomasDiarias.setError(null);
+            tomasDiarias = 0;
         }
+
+        // Validar horario solo si tomas diarias > 0
 
         if (tomasDiarias > 0) {
             // Si tiene tomas diarias, requiere horario
@@ -469,19 +500,54 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     }
 
     private Medicamento crearMedicamento() {
-        String nombre = etNombre.getText().toString();
-        String afeccion = etAfeccion.getText().toString();
-        String detalles = etDetalles.getText().toString();
-        String presentacion = spinnerPresentacion.getSelectedItem().toString();
-        int tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
+        String nombre = etNombre.getText() != null ? etNombre.getText().toString() : "";
+        String afeccion = etAfeccion.getText() != null ? etAfeccion.getText().toString() : "";
+        String detalles = etDetalles.getText() != null ? etDetalles.getText().toString() : "";
+        
+        // Obtener presentación del spinner (puede ser null)
+        Object selectedItem = spinnerPresentacion.getSelectedItem();
+        String presentacion = selectedItem != null ? selectedItem.toString() : "Comprimidos";
+        
+        // Obtener tomas diarias (puede estar vacío para medicamentos ocasionales)
+        int tomasDiarias = 0;
+        if (!TextUtils.isEmpty(etTomasDiarias.getText())) {
+            try {
+                tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
+            } catch (NumberFormatException e) {
+                tomasDiarias = 0; // Por defecto, medicamento ocasional
+            }
+        }
         
         // Si tomas diarias = 0, usar string vacío "" (medicamento ocasional)
         // Esto es consistente con React: cuando tomasDiarias = 0, primeraToma = ""
-        String horarioPrimeraToma = (tomasDiarias > 0) ? horaSeleccionada : "";
+        String horarioPrimeraToma = (tomasDiarias > 0 && horaSeleccionada != null) ? horaSeleccionada : "";
         
-        int stockInicial = Integer.parseInt(etStockInicial.getText().toString());
-        String diasTratamientoStr = etDiasTratamiento.getText().toString();
-        int diasTratamiento = diasTratamientoStr.isEmpty() ? -1 : Integer.parseInt(diasTratamientoStr);
+        // Obtener stock inicial (puede estar vacío, usar valor por defecto)
+        int stockInicial = 0;
+        if (!TextUtils.isEmpty(etStockInicial.getText())) {
+            try {
+                stockInicial = Integer.parseInt(etStockInicial.getText().toString());
+                if (stockInicial < 0) {
+                    stockInicial = 0; // No permitir valores negativos
+                }
+            } catch (NumberFormatException e) {
+                stockInicial = 0; // Por defecto
+            }
+        }
+        
+        // Obtener días de tratamiento (puede estar vacío, -1 para crónico)
+        String diasTratamientoStr = etDiasTratamiento.getText() != null ? etDiasTratamiento.getText().toString() : "";
+        int diasTratamiento = -1; // Por defecto, crónico
+        if (!TextUtils.isEmpty(diasTratamientoStr)) {
+            try {
+                diasTratamiento = Integer.parseInt(diasTratamientoStr);
+                if (diasTratamiento < -1) {
+                    diasTratamiento = -1; // No permitir valores menores a -1
+                }
+            } catch (NumberFormatException e) {
+                diasTratamiento = -1; // Por defecto, crónico
+            }
+        }
 
         // Si es edición, usar el ID del medicamento existente
         // Si es creación, el ID se generará automáticamente en Firebase
@@ -669,10 +735,18 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     
     /**
      * Sincroniza el medicamento con Google Calendar si está conectado
+     * Solo crea eventos para medicamentos con tomas diarias > 0
      */
     private void sincronizarConGoogleCalendar(Medicamento medicamento) {
         Logger.d("NuevaMedicinaActivity", "sincronizarConGoogleCalendar: Iniciando sincronización para medicamento: " + 
             (medicamento != null ? medicamento.getNombre() : "null"));
+        
+        // Solo crear eventos si el medicamento tiene tomas diarias programadas
+        if (medicamento == null || medicamento.getTomasDiarias() <= 0) {
+            Logger.d("NuevaMedicinaActivity", "sincronizarConGoogleCalendar: Medicamento ocasional o sin tomas diarias, no se crean eventos");
+            return;
+        }
+        
         // Verificar si Google Calendar está conectado
         googleCalendarAuthService.tieneGoogleCalendarConectado(
             new GoogleCalendarAuthService.FirestoreCallback() {
@@ -686,14 +760,23 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                             new GoogleCalendarAuthService.FirestoreCallback() {
                                 @Override
                                 public void onSuccess(Object tokenResult) {
+                                    Logger.d("NuevaMedicinaActivity", 
+                                        "obtenerTokenGoogle callback: tokenResult = " + 
+                                        (tokenResult != null ? tokenResult.getClass().getSimpleName() : "null"));
+                                    
                                     if (tokenResult != null && tokenResult instanceof Map) {
                                         @SuppressWarnings("unchecked")
                                         Map<String, Object> tokenData = (Map<String, Object>) tokenResult;
                                         String accessToken = (String) tokenData.get("access_token");
                                         
+                                        Logger.d("NuevaMedicinaActivity", 
+                                            "Access token obtenido: " + (accessToken != null && !accessToken.isEmpty() ? "SÍ" : "NO"));
+                                        
                                         if (accessToken != null && !accessToken.isEmpty()) {
                                             Logger.d("NuevaMedicinaActivity", 
-                                                "Token de Google Calendar obtenido, creando eventos");
+                                                "Token de Google Calendar obtenido, creando eventos para medicamento: " + 
+                                                medicamento.getNombre() + " (Tomas diarias: " + medicamento.getTomasDiarias() + 
+                                                ", Horario primera toma: " + medicamento.getHorarioPrimeraToma() + ")");
                                             // Crear eventos recurrentes en Google Calendar
                                             googleCalendarService.crearEventosRecurrentes(
                                                 accessToken, 
@@ -702,17 +785,20 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                                                     @Override
                                                     public void onSuccess(List<String> eventoIds) {
                                                         Logger.d("NuevaMedicinaActivity", 
-                                                            "Eventos de Google Calendar creados: " + eventoIds.size());
+                                                            "Eventos de Google Calendar creados exitosamente: " + eventoIds.size() + " eventos");
                                                         
                                                         // Guardar los IDs de eventos en el medicamento
                                                         if (!eventoIds.isEmpty() && medicamento.getId() != null) {
                                                             guardarEventoIdsEnMedicamento(medicamento.getId(), eventoIds);
+                                                        } else if (eventoIds.isEmpty()) {
+                                                            Logger.w("NuevaMedicinaActivity", 
+                                                                "No se crearon eventos (lista vacía). ¿El medicamento tiene tomas diarias > 0?");
                                                         }
                                                     }
                                                     
                                                     @Override
                                                     public void onError(Exception exception) {
-                                                        Logger.w("NuevaMedicinaActivity", 
+                                                        Logger.e("NuevaMedicinaActivity", 
                                                             "Error al crear eventos en Google Calendar", exception);
                                                         // No mostrar error al usuario, es opcional
                                                     }
@@ -720,17 +806,19 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                                             );
                                         } else {
                                             Logger.w("NuevaMedicinaActivity", 
-                                                "Token de Google Calendar no disponible o vacío");
+                                                "Token de Google Calendar no disponible o vacío. TokenData keys: " + 
+                                                (tokenData != null ? tokenData.keySet().toString() : "null"));
                                         }
                                     } else {
                                         Logger.w("NuevaMedicinaActivity", 
-                                            "Token de Google Calendar es null o no es un Map");
+                                            "Token de Google Calendar es null o no es un Map. Tipo: " + 
+                                            (tokenResult != null ? tokenResult.getClass().getName() : "null"));
                                     }
                                 }
                                 
                                 @Override
                                 public void onError(Exception exception) {
-                                    Logger.w("NuevaMedicinaActivity", 
+                                    Logger.e("NuevaMedicinaActivity", 
                                         "Error al obtener token de Google Calendar", exception);
                                     // No intentar crear eventos si no se pudo obtener el token
                                     // El error ya está logueado para debugging
@@ -754,26 +842,30 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     }
     
     /**
-     * Guarda los IDs de eventos de Google Calendar en el medicamento
+     * Guarda los IDs de eventos de Google Calendar en el medicamento en Firestore
      */
     private void guardarEventoIdsEnMedicamento(String medicamentoId, List<String> eventoIds) {
-        firebaseService.obtenerMedicamento(medicamentoId, new FirebaseService.FirestoreCallback() {
-            @Override
-            public void onSuccess(Object result) {
-                if (result instanceof Medicamento) {
-                    Medicamento medicamento = (Medicamento) result;
-                    // Los eventoIds se guardan automáticamente en Firestore cuando se crean
-                    // No necesitamos hacer nada adicional aquí
-                    Logger.d("NuevaMedicinaActivity", 
-                        "IDs de eventos guardados para medicamento: " + medicamentoId);
-                }
-            }
-            
-            @Override
-            public void onError(Exception exception) {
-                Logger.w("NuevaMedicinaActivity", 
-                    "Error al guardar IDs de eventos en medicamento", exception);
-            }
-        });
+        if (medicamentoId == null || medicamentoId.isEmpty() || eventoIds == null || eventoIds.isEmpty()) {
+            Logger.w("NuevaMedicinaActivity", 
+                "No se pueden guardar eventoIds: medicamentoId o eventoIds inválidos");
+            return;
+        }
+        
+        Logger.d("NuevaMedicinaActivity", 
+            "Guardando " + eventoIds.size() + " eventoIds en Firestore para medicamento: " + medicamentoId);
+        
+        // Guardar directamente en Firestore
+        com.google.firebase.firestore.FirebaseFirestore db = com.google.firebase.firestore.FirebaseFirestore.getInstance();
+        db.collection("medicamentos")
+            .document(medicamentoId)
+            .update("eventoIdsGoogleCalendar", eventoIds)
+            .addOnSuccessListener(aVoid -> {
+                Logger.d("NuevaMedicinaActivity", 
+                    "EventoIds guardados exitosamente en Firestore para medicamento: " + medicamentoId);
+            })
+            .addOnFailureListener(e -> {
+                Logger.e("NuevaMedicinaActivity", 
+                    "Error al guardar eventoIds en Firestore para medicamento: " + medicamentoId, e);
+            });
     }
 }
