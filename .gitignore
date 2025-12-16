@@ -55,6 +55,10 @@ captures/
 # Google Services (e.g. APIs or Firebase)
 google-services.json
 
+# Firebase Admin SDK credentials (NEVER commit these!)
+*-firebase-adminsdk-*.json
+firebase-adminsdk-*.json
+
 # Freeline
 freeline.py
 freeline/
