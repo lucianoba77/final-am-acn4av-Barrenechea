@@ -2,6 +2,7 @@ package com.controlmedicamentos.myapplication.adapters;
 
 import android.content.Context;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -56,7 +57,14 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
 
     @Override
     public int getItemCount() {
-        return medicamentos.size();
+        return medicamentos != null ? medicamentos.size() : 0;
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull MedicamentoViewHolder holder) {
+        super.onViewRecycled(holder);
+        // Limpiar recursos del ViewHolder cuando se recicla
+        holder.onViewRecycled();
     }
 
     public void actualizarMedicamentos(List<Medicamento> nuevosMedicamentos) {
@@ -72,6 +80,7 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
         private TextView tvStockInfo;
         private MaterialButton btnTomado;
         private MaterialButton btnPosponer;
+        private Handler handler; // Handler para animaciones, se limpia en onViewRecycled
 
         public MedicamentoViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -82,6 +91,17 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
             tvStockInfo = itemView.findViewById(R.id.tvStockInfo);
             btnTomado = itemView.findViewById(R.id.btnTomado);
             btnPosponer = itemView.findViewById(R.id.btnPosponer);
+            // Inicializar Handler con Looper explícito para evitar memory leaks
+            handler = new Handler(Looper.getMainLooper());
+        }
+        
+        /**
+         * Limpia recursos cuando el ViewHolder se recicla
+         */
+        public void onViewRecycled() {
+            if (handler != null) {
+                handler.removeCallbacksAndMessages(null);
+            }
         }
 
         public void bind(Medicamento medicamento) {
@@ -217,14 +237,22 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
 
         /**
          * Inicia el efecto de parpadeo para la barra roja
+         * Usa el Handler del ViewHolder para evitar memory leaks
          */
         private void iniciarParpadeo(ProgressBar barra) {
-            Handler handler = new Handler();
+            if (handler == null || barra == null) {
+                return;
+            }
+            
+            // Limpiar cualquier callback previo para esta barra
+            handler.removeCallbacksAndMessages(null);
+            
             Runnable runnable = new Runnable() {
                 boolean visible = true;
                 @Override
                 public void run() {
-                    if (barra.getVisibility() == View.VISIBLE) {
+                    // Verificar que la barra aún existe y es visible
+                    if (barra != null && barra.getVisibility() == View.VISIBLE && handler != null) {
                         barra.setAlpha(visible ? 1.0f : 0.3f);
                         visible = !visible;
                         handler.postDelayed(this, 500); // Parpadear cada 500ms
