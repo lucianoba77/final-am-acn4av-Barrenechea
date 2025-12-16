@@ -8,11 +8,13 @@ import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
 import com.controlmedicamentos.myapplication.utils.Constants;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -24,11 +26,14 @@ public class TomaTrackingService {
     private Context context;
     private SharedPreferences preferences;
     private Map<String, List<TomaProgramada>> tomasPorMedicamento;
+    // Cache para evitar reinicializaciones innecesarias: medicamentoId -> fecha de última inicialización
+    private Map<String, String> ultimaInicializacionPorMedicamento;
     
     public TomaTrackingService(Context context) {
         this.context = context;
         this.preferences = context.getSharedPreferences(Constants.PREF_NAME, Context.MODE_PRIVATE);
         this.tomasPorMedicamento = new HashMap<>();
+        this.ultimaInicializacionPorMedicamento = new HashMap<>();
         cargarTomasProgramadas();
     }
     
@@ -45,18 +50,34 @@ public class TomaTrackingService {
             return;
         }
         
+        String medicamentoId = medicamento.getId();
+        String fechaHoy = obtenerFechaHoy();
+        
+        // Verificar si ya se inicializó hoy para este medicamento
+        String ultimaInicializacion = ultimaInicializacionPorMedicamento.get(medicamentoId);
+        if (fechaHoy.equals(ultimaInicializacion)) {
+            // Ya se inicializó hoy, verificar que las tomas existan
+            List<TomaProgramada> tomasExistentes = tomasPorMedicamento.get(medicamentoId);
+            if (tomasExistentes != null && !tomasExistentes.isEmpty()) {
+                Log.d(TAG, "inicializarTomasDia: ya inicializado hoy para " + medicamentoId + ", omitiendo");
+                return;
+            }
+            // Si las tomas fueron eliminadas, continuar con la inicialización
+        }
+        
         List<String> horarios = medicamento.getHorariosTomas();
         if (horarios == null || horarios.isEmpty()) {
-            Log.w(TAG, "inicializarTomasDia: horarios vacíos para medicamento " + medicamento.getId() + 
+            Log.w(TAG, "inicializarTomasDia: horarios vacíos para medicamento " + medicamentoId + 
                   ", tomasDiarias=" + medicamento.getTomasDiarias() + 
                   ", horarioPrimeraToma=" + medicamento.getHorarioPrimeraToma());
             // Limpiar tomas anteriores incluso si no hay horarios
-            tomasPorMedicamento.remove(medicamento.getId());
+            tomasPorMedicamento.remove(medicamentoId);
+            ultimaInicializacionPorMedicamento.remove(medicamentoId);
             guardarTomasProgramadas();
             return;
         }
         
-        Log.d(TAG, "inicializarTomasDia: inicializando " + horarios.size() + " tomas para medicamento " + medicamento.getId());
+        Log.d(TAG, "inicializarTomasDia: inicializando " + horarios.size() + " tomas para medicamento " + medicamentoId);
         
         Calendar ahora = Calendar.getInstance();
         Calendar hoy = Calendar.getInstance();
@@ -154,10 +175,21 @@ public class TomaTrackingService {
             tomas.addAll(tomasExistentes);
         }
         
-        tomasPorMedicamento.put(medicamento.getId(), tomas);
+        tomasPorMedicamento.put(medicamentoId, tomas);
+        // Marcar que se inicializó hoy
+        ultimaInicializacionPorMedicamento.put(medicamentoId, fechaHoy);
         guardarTomasProgramadas();
         
-        Log.d(TAG, "inicializarTomasDia: " + tomas.size() + " tomas inicializadas para medicamento " + medicamento.getId());
+        Log.d(TAG, "inicializarTomasDia: " + tomas.size() + " tomas inicializadas para medicamento " + medicamentoId);
+    }
+    
+    /**
+     * Obtiene la fecha de hoy en formato YYYY-MM-DD para usar como clave de caché
+     * @return String con la fecha de hoy
+     */
+    private String obtenerFechaHoy() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        return sdf.format(new Date());
     }
     
     /**

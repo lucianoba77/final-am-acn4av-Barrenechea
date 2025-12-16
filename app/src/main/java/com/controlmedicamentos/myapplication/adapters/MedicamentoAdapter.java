@@ -159,9 +159,16 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
             llBarrasTomas.removeAllViews();
 
             // Obtener estado de las tomas programadas
+            // Nota: No inicializamos aquí para evitar reinicializaciones innecesarias.
+            // La inicialización se hace en MedicamentoDataManager cuando se cargan los datos.
+            // Si las tomas no existen, se inicializarán automáticamente cuando sea necesario.
             TomaTrackingService trackingService = new TomaTrackingService(context);
-            trackingService.inicializarTomasDia(medicamento);
+            // Solo inicializar si no hay tomas para este medicamento (optimización)
             List<TomaProgramada> tomasProgramadas = trackingService.obtenerTomasMedicamento(medicamento.getId());
+            if (tomasProgramadas == null || tomasProgramadas.isEmpty()) {
+                trackingService.inicializarTomasDia(medicamento);
+                tomasProgramadas = trackingService.obtenerTomasMedicamento(medicamento.getId());
+            }
 
             // Crear barras según tomas diarias
             int tomasDiarias = medicamento.getTomasDiarias();

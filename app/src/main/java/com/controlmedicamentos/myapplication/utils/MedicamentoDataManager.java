@@ -8,8 +8,11 @@ import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.services.TomaTrackingService;
 import com.google.firebase.firestore.ListenerRegistration;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 import java.util.List;
 
 /**
@@ -23,6 +26,11 @@ public class MedicamentoDataManager {
     private final Context context;
     private ListenerRegistration medicamentosListener;
     private volatile boolean listenerYaActualizo = false; // volatile para evitar race conditions
+    
+    // Cache para ordenamiento: lista de medicamentos -> lista ordenada
+    private List<Medicamento> ultimaListaOrdenada = null;
+    private String ultimaFechaOrdenamiento = null;
+    private int ultimosMinutosActuales = -1;
 
     /**
      * Callback para notificar cambios en los datos.
@@ -251,6 +259,17 @@ public class MedicamentoDataManager {
         int horaActual = cal.get(Calendar.HOUR_OF_DAY);
         int minutoActual = cal.get(Calendar.MINUTE);
         int minutosActuales = horaActual * 60 + minutoActual;
+        
+        // Verificar caché: si la lista es la misma y estamos en el mismo minuto, retornar caché
+        String fechaHoy = obtenerFechaHoy();
+        if (ultimaListaOrdenada != null && 
+            ultimaFechaOrdenamiento != null && 
+            fechaHoy.equals(ultimaFechaOrdenamiento) &&
+            ultimosMinutosActuales == minutosActuales &&
+            listasSonIguales(medicamentos, ultimaListaOrdenada)) {
+            Logger.d("MedicamentoDataManager", "Usando caché de ordenamiento");
+            return new ArrayList<>(ultimaListaOrdenada); // Retornar copia para evitar modificación
+        }
 
         // Crear una copia para no modificar la original
         List<Medicamento> medicamentosOrdenados = new ArrayList<>(medicamentos);
@@ -290,7 +309,48 @@ public class MedicamentoDataManager {
             return Integer.compare(minutos1, minutos2);
         });
 
+        // Guardar en caché
+        ultimaListaOrdenada = new ArrayList<>(medicamentosOrdenados);
+        ultimaFechaOrdenamiento = fechaHoy;
+        ultimosMinutosActuales = minutosActuales;
+
         return medicamentosOrdenados;
+    }
+    
+    /**
+     * Compara dos listas de medicamentos para verificar si son iguales (mismos IDs y orden).
+     * @param lista1 Primera lista
+     * @param lista2 Segunda lista
+     * @return true si las listas tienen los mismos medicamentos en el mismo orden
+     */
+    private boolean listasSonIguales(List<Medicamento> lista1, List<Medicamento> lista2) {
+        if (lista1 == null || lista2 == null) {
+            return lista1 == lista2;
+        }
+        if (lista1.size() != lista2.size()) {
+            return false;
+        }
+        for (int i = 0; i < lista1.size(); i++) {
+            Medicamento m1 = lista1.get(i);
+            Medicamento m2 = lista2.get(i);
+            if (m1 == null || m2 == null) {
+                if (m1 != m2) {
+                    return false;
+                }
+            } else if (!m1.getId().equals(m2.getId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Obtiene la fecha de hoy en formato YYYY-MM-DD para usar como clave de caché
+     * @return String con la fecha de hoy
+     */
+    private String obtenerFechaHoy() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        return sdf.format(new Date());
     }
 
     /**
