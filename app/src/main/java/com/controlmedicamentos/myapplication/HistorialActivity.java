@@ -23,6 +23,7 @@ import com.controlmedicamentos.myapplication.services.AuthService;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.utils.AdherenciaCalculator;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
+import com.controlmedicamentos.myapplication.utils.NavigationHelper;
 import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.BarData;
@@ -502,43 +503,14 @@ public class HistorialActivity extends AppCompatActivity {
     }
     
     private void configurarNavegacion() {
-        if (btnNavHome != null) {
-            btnNavHome.setOnClickListener(v -> {
-                Intent intent = new Intent(HistorialActivity.this, MainActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                startActivity(intent);
-                finish();
-            });
-        }
-        
-        if (btnNavNuevaMedicina != null) {
-            btnNavNuevaMedicina.setOnClickListener(v -> {
-                Intent intent = new Intent(HistorialActivity.this, NuevaMedicinaActivity.class);
-                startActivity(intent);
-            });
-        }
-        
-        if (btnNavBotiquin != null) {
-            btnNavBotiquin.setOnClickListener(v -> {
-                Intent intent = new Intent(HistorialActivity.this, BotiquinActivity.class);
-                startActivity(intent);
-                finish();
-            });
-        }
-        
-        if (btnNavHistorial != null) {
-            btnNavHistorial.setOnClickListener(v -> {
-                // Ya estamos en historial, no hacer nada
-            });
-        }
-        
-        if (btnNavAjustes != null) {
-            btnNavAjustes.setOnClickListener(v -> {
-                Intent intent = new Intent(HistorialActivity.this, AjustesActivity.class);
-                startActivity(intent);
-                finish();
-            });
-        }
+        NavigationHelper.configurarNavegacion(
+            this,
+            btnNavHome,
+            btnNavNuevaMedicina,
+            btnNavBotiquin,
+            btnNavHistorial,
+            btnNavAjustes
+        );
     }
 
     /**

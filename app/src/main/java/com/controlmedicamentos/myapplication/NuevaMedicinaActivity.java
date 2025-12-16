@@ -31,6 +31,8 @@ import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.ColorUtils;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
 import com.controlmedicamentos.myapplication.utils.Logger;
+import com.controlmedicamentos.myapplication.utils.NavigationHelper;
+import com.controlmedicamentos.myapplication.utils.ErrorHandler;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
@@ -173,44 +175,14 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     }
     
     private void configurarNavegacion() {
-        if (btnNavHome != null) {
-            btnNavHome.setOnClickListener(v -> {
-                Intent intent = new Intent(NuevaMedicinaActivity.this, MainActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                startActivity(intent);
-                finish();
-            });
-        }
-        
-        if (btnNavNuevaMedicina != null) {
-            btnNavNuevaMedicina.setOnClickListener(v -> {
-                // Ya estamos en nueva medicina
-            });
-        }
-        
-        if (btnNavBotiquin != null) {
-            btnNavBotiquin.setOnClickListener(v -> {
-                Intent intent = new Intent(NuevaMedicinaActivity.this, BotiquinActivity.class);
-                startActivity(intent);
-                finish();
-            });
-        }
-        
-        if (btnNavHistorial != null) {
-            btnNavHistorial.setOnClickListener(v -> {
-                Intent intent = new Intent(NuevaMedicinaActivity.this, HistorialActivity.class);
-                startActivity(intent);
-                finish();
-            });
-        }
-        
-        if (btnNavAjustes != null) {
-            btnNavAjustes.setOnClickListener(v -> {
-                Intent intent = new Intent(NuevaMedicinaActivity.this, AjustesActivity.class);
-                startActivity(intent);
-                finish();
-            });
-        }
+        NavigationHelper.configurarNavegacion(
+            this,
+            btnNavHome,
+            btnNavNuevaMedicina,
+            btnNavBotiquin,
+            btnNavHistorial,
+            btnNavAjustes
+        );
     }
     
     private void configurarSpinner() {
@@ -312,10 +284,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(Exception exception) {
-                        Toast.makeText(NuevaMedicinaActivity.this, 
-                            "Error al actualizar medicamento: " + 
-                            (exception != null ? exception.getMessage() : "Error desconocido"), 
-                            Toast.LENGTH_LONG).show();
+                        ErrorHandler.handleError(NuevaMedicinaActivity.this, exception, "NuevaMedicinaActivity");
                     }
                 });
             } else {
@@ -338,10 +307,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(Exception exception) {
-                        Toast.makeText(NuevaMedicinaActivity.this, 
-                            "Error al guardar medicamento: " + 
-                            (exception != null ? exception.getMessage() : "Error desconocido"), 
-                            Toast.LENGTH_LONG).show();
+                        ErrorHandler.handleError(NuevaMedicinaActivity.this, exception, "NuevaMedicinaActivity");
                     }
                 });
             }
@@ -363,10 +329,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
 
             @Override
             public void onError(Exception exception) {
-                Toast.makeText(NuevaMedicinaActivity.this, 
-                    "Error al cargar medicamento: " + 
-                    (exception != null ? exception.getMessage() : "Error desconocido"), 
-                    Toast.LENGTH_LONG).show();
+                ErrorHandler.handleError(NuevaMedicinaActivity.this, exception, "NuevaMedicinaActivity");
                 finish(); // Cerrar si no se puede cargar
             }
         });

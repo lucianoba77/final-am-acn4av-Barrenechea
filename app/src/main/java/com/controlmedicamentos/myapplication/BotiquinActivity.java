@@ -25,6 +25,7 @@ import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
 import com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper;
 import com.controlmedicamentos.myapplication.utils.Logger;
+import com.controlmedicamentos.myapplication.utils.NavigationHelper;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -125,33 +126,14 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     }
 
     private void configurarNavegacion() {
-        btnNavHome.setOnClickListener(v -> {
-            Intent intent = new Intent(BotiquinActivity.this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            startActivity(intent);
-            finish();
-        });
-        
-        btnNavNuevaMedicina.setOnClickListener(v -> {
-            Intent intent = new Intent(BotiquinActivity.this, NuevaMedicinaActivity.class);
-            startActivity(intent);
-        });
-        
-        btnNavBotiquin.setOnClickListener(v -> {
-            // Ya estamos en botiquín
-        });
-        
-        btnNavHistorial.setOnClickListener(v -> {
-            Intent intent = new Intent(BotiquinActivity.this, HistorialActivity.class);
-            startActivity(intent);
-            finish();
-        });
-        
-        btnNavAjustes.setOnClickListener(v -> {
-            Intent intent = new Intent(BotiquinActivity.this, AjustesActivity.class);
-            startActivity(intent);
-            finish();
-        });
+        NavigationHelper.configurarNavegacion(
+            this,
+            btnNavHome,
+            btnNavNuevaMedicina,
+            btnNavBotiquin,
+            btnNavHistorial,
+            btnNavAjustes
+        );
     }
 
     private void cargarMedicamentos() {

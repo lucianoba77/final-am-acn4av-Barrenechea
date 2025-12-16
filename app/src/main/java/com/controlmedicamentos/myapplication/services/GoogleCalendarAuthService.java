@@ -119,6 +119,7 @@ public class GoogleCalendarAuthService {
                                 eliminarTokenGoogle(new FirestoreCallback() {
                                     @Override
                                     public void onSuccess(Object result) {
+                                        Log.d(TAG, "Token eliminado después de fallo en renovación");
                                         if (callback != null) {
                                             callback.onSuccess(null);
                                         }
@@ -126,11 +127,13 @@ public class GoogleCalendarAuthService {
                                     
                                     @Override
                                     public void onError(Exception exception) {
+                                        Log.e(TAG, "Error al eliminar token después de fallo en renovación", exception);
+                                        // Aún así, notificar éxito al callback para no bloquear el flujo
                                         if (callback != null) {
                                             callback.onSuccess(null);
                                         }
-                                                }
-                                            });
+                                    }
+                                });
                                         }
                                     }
                                     

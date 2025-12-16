@@ -13,6 +13,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import com.controlmedicamentos.myapplication.utils.ErrorHandler;
 import com.controlmedicamentos.myapplication.utils.Logger;
+import com.controlmedicamentos.myapplication.utils.NavigationHelper;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -264,48 +265,14 @@ public class AjustesActivity extends AppCompatActivity {
         });
         
         // Navegación inferior
-        btnNavHome.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(AjustesActivity.this, MainActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                startActivity(intent);
-                finish();
-            }
-        });
-        
-        btnNavNuevaMedicina.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(AjustesActivity.this, NuevaMedicinaActivity.class);
-                startActivity(intent);
-            }
-        });
-        
-        btnNavBotiquin.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(AjustesActivity.this, BotiquinActivity.class);
-                startActivity(intent);
-                finish();
-            }
-        });
-
-        btnNavHistorial.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(AjustesActivity.this, HistorialActivity.class);
-                startActivity(intent);
-                finish();
-            }
-        });
-
-        btnNavAjustes.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Ya estamos en ajustes, no hacer nada
-            }
-        });
+        NavigationHelper.configurarNavegacion(
+            this,
+            btnNavHome,
+            btnNavNuevaMedicina,
+            btnNavBotiquin,
+            btnNavHistorial,
+            btnNavAjustes
+        );
 
         btnLogout.setOnClickListener(new View.OnClickListener() {
             @Override
