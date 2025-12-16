@@ -268,12 +268,26 @@ public class GoogleCalendarOnDemandHelper {
         googleCalendarService.eliminarEventos(
             accessToken,
             eventoIds,
-            new GoogleCalendarService.DeleteEventsCallback() {
+            new GoogleCalendarService.MultipleEventsCallback() {
                 @Override
-                public void onSuccess() {
-                    Log.d(TAG, "Eventos eliminados exitosamente");
+                public void onSuccess(List<String> eventoIdsEliminados) {
+                    Log.d(TAG, "Eventos eliminados exitosamente: " + eventoIdsEliminados.size());
                     Toast.makeText(activity, 
                         "Eventos eliminados de Google Calendar", 
+                        Toast.LENGTH_SHORT).show();
+                    
+                    // Limpiar eventoIds del medicamento
+                    limpiarEventoIdsDelMedicamento(medicamentoId);
+                    
+                    limpiarAccionPendiente();
+                    regresarAActividadAnterior();
+                }
+                
+                @Override
+                public void onPartialSuccess(List<String> eventoIdsEliminados, List<Exception> errores) {
+                    Log.w(TAG, "Algunos eventos eliminados: " + eventoIdsEliminados.size() + ", errores: " + errores.size());
+                    Toast.makeText(activity, 
+                        "Algunos eventos eliminados de Google Calendar", 
                         Toast.LENGTH_SHORT).show();
                     
                     // Limpiar eventoIds del medicamento
@@ -428,6 +442,25 @@ public class GoogleCalendarOnDemandHelper {
      */
     private static void regresarAActividadAnterior(Activity activity) {
         activity.finish();
+    }
+    
+    /**
+     * Verifica si hay un medicamento pendiente para eliminar después de eliminar eventos
+     * @return El ID del medicamento a eliminar, o null si no hay ninguno
+     */
+    public static String obtenerMedicamentoPendienteEliminar(android.content.Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        return prefs.getString(KEY_PENDING_ELIMINAR_MEDICAMENTO, null);
+    }
+    
+    /**
+     * Limpia el flag de eliminación de medicamento
+     */
+    public static void limpiarFlagEliminacionMedicamento(android.content.Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(KEY_PENDING_ELIMINAR_MEDICAMENTO);
+        editor.apply();
     }
 }
 

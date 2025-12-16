@@ -268,29 +268,9 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 }
             }
             
-            @Override
-            public void onError(Exception exception) {
-                // Si hay error al verificar, eliminar el medicamento de todas formas
-                Logger.w("BotiquinActivity", "Error al verificar eventoIds, eliminando medicamento de todas formas", exception);
-                eliminarMedicamentoDeFirestore(medicamentoId);
-            }
         });
     }
     
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Verificar si hay un medicamento pendiente para eliminar después de eliminar eventos
-        String medicamentoId = com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper
-            .obtenerMedicamentoPendienteEliminar(this);
-        if (medicamentoId != null) {
-            // Limpiar el flag
-            com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper
-                .limpiarFlagEliminacionMedicamento(this);
-            // Continuar con la eliminación del medicamento
-            eliminarMedicamentoDeFirestore(medicamentoId);
-        }
-    }
 
     /**
      * Elimina un medicamento de Firestore.
@@ -496,5 +476,16 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     protected void onResume() {
         super.onResume();
         cargarMedicamentos();
+        
+        // Verificar si hay un medicamento pendiente para eliminar después de eliminar eventos
+        String medicamentoId = com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper
+            .obtenerMedicamentoPendienteEliminar(this);
+        if (medicamentoId != null) {
+            // Limpiar el flag
+            com.controlmedicamentos.myapplication.utils.GoogleCalendarOnDemandHelper
+                .limpiarFlagEliminacionMedicamento(this);
+            // Continuar con la eliminación del medicamento
+            eliminarMedicamentoDeFirestore(medicamentoId);
+        }
     }
 }
