@@ -132,5 +132,92 @@ public class Constants {
      * Tiempo de espera en milisegundos antes de actualizar la UI después de una operación.
      */
     public static final int DELAY_ACTUALIZACION_UI_MS = 300;
+    
+    // ==================== ANIMACIONES Y UI ====================
+    
+    /**
+     * Intervalo de parpadeo en milisegundos para barras de alerta roja.
+     */
+    public static final int INTERVALO_PARPADEO_MS = 500;
+    
+    // ==================== GOOGLE CALENDAR ====================
+    
+    /**
+     * Duración en minutos de los eventos de Google Calendar para tomas de medicamentos.
+     */
+    public static final int DURACION_EVENTO_CALENDAR_MINUTOS = 15;
+    
+    /**
+     * Minutos antes del evento para el recordatorio de Google Calendar.
+     */
+    public static final int RECORDATORIO_CALENDAR_MINUTOS = 15;
+    
+    // ==================== NOTIFICACIONES Y VIBRACIÓN ====================
+    
+    /**
+     * Patrón de vibración estándar: esperar 0ms, vibrar 500ms, esperar 500ms, vibrar 500ms.
+     */
+    public static final long[] PATRON_VIBRACION_ESTANDAR = {0, 500, 500, 500};
+    
+    /**
+     * Patrón de vibración intenso: esperar 0ms, vibrar 500ms, esperar 200ms, vibrar 500ms, esperar 200ms, vibrar 500ms.
+     */
+    public static final long[] PATRON_VIBRACION_INTENSO = {0, 500, 200, 500, 200, 500};
+    
+    // ==================== STOCK POR DEFECTO ====================
+    
+    /**
+     * Stock inicial por defecto para comprimidos/cápsulas.
+     */
+    public static final int STOCK_DEFAULT_COMPRIMIDOS = 30;
+    
+    /**
+     * Días estimados de duración por defecto para jarabes/inyecciones.
+     */
+    public static final int DIAS_DEFAULT_JARABE = 15;
+    
+    /**
+     * Días estimados de duración por defecto para cremas/pomadas/parches.
+     */
+    public static final int DIAS_DEFAULT_CREMA = 20;
+    
+    /**
+     * Días estimados de duración por defecto para sprays/gotas.
+     */
+    public static final int DIAS_DEFAULT_SPRAY = 10;
+    
+    // ==================== ALARMAS ====================
+    
+    /**
+     * Días máximos para programar alarmas futuras (para evitar exceder límite de 500 alarmas).
+     */
+    public static final int DIAS_MAXIMOS_ALARMAS = 30;
+    
+    /**
+     * Límite máximo de alarmas concurrentes de Android.
+     */
+    public static final int LIMITE_ALARMAS_ANDROID = 500;
+    
+    // ==================== PARSING Y VALIDACIÓN ====================
+    
+    /**
+     * Formato de fecha para caché: YYYY-MM-DD
+     */
+    public static final String FORMATO_FECHA_CACHE = "yyyy-MM-dd";
+    
+    /**
+     * Formato de hora: HH:mm
+     */
+    public static final String FORMATO_HORA = "HH:mm";
+    
+    /**
+     * Separador de hora y minutos en formato HH:mm
+     */
+    public static final String SEPARADOR_HORA = ":";
+    
+    /**
+     * Número mínimo de partes esperadas al dividir un horario (hora:minuto = 2 partes).
+     */
+    public static final int PARTES_HORARIO_ESPERADAS = 2;
 }
 

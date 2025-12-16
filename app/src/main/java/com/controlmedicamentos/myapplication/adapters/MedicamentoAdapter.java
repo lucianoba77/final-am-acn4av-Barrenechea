@@ -18,6 +18,7 @@ import com.controlmedicamentos.myapplication.R;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
 import com.controlmedicamentos.myapplication.services.TomaTrackingService;
+import com.controlmedicamentos.myapplication.utils.Constants;
 import java.util.List;
 
 public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.MedicamentoViewHolder> {
@@ -262,7 +263,7 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
                     if (barra != null && barra.getVisibility() == View.VISIBLE && handler != null) {
                         barra.setAlpha(visible ? 1.0f : 0.3f);
                         visible = !visible;
-                        handler.postDelayed(this, 500); // Parpadear cada 500ms
+                        handler.postDelayed(this, Constants.INTERVALO_PARPADEO_MS);
                     }
                 }
             };

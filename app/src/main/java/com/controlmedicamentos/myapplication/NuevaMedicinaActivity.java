@@ -242,23 +242,23 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             case "Comprimidos":
             case "Cápsulas":
                 tilStockInicial.setHint("Cantidad de comprimidos");
-                etStockInicial.setHint("30");
+                etStockInicial.setHint(String.valueOf(Constants.STOCK_DEFAULT_COMPRIMIDOS));
                 break;
             case "Jarabe":
             case "Inyección":
                 tilStockInicial.setHint("Días estimados de duración");
-                etStockInicial.setHint("15");
+                etStockInicial.setHint(String.valueOf(Constants.DIAS_DEFAULT_JARABE));
                 break;
             case "Crema":
             case "Pomada":
             case "Parche":
                 tilStockInicial.setHint("Días estimados de duración");
-                etStockInicial.setHint("20");
+                etStockInicial.setHint(String.valueOf(Constants.DIAS_DEFAULT_CREMA));
                 break;
             case "Spray nasal":
             case "Gotas":
                 tilStockInicial.setHint("Días estimados de duración");
-                etStockInicial.setHint("10");
+                etStockInicial.setHint(String.valueOf(Constants.DIAS_DEFAULT_SPRAY));
                 break;
         }
     }

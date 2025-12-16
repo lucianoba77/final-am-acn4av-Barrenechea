@@ -72,7 +72,7 @@ public class GoogleCalendarService {
             }
             
             Calendar fechaFin = (Calendar) fechaCompleta.clone();
-            fechaFin.add(Calendar.MINUTE, 15); // Evento de 15 minutos
+            fechaFin.add(Calendar.MINUTE, Constants.DURACION_EVENTO_CALENDAR_MINUTOS);
             
             // Obtener zona horaria del dispositivo
             String timeZone = java.util.TimeZone.getDefault().getID();
@@ -105,7 +105,7 @@ public class GoogleCalendarService {
             JSONArray overrides = new JSONArray();
             JSONObject reminder1 = new JSONObject();
             reminder1.put("method", "popup");
-            reminder1.put("minutes", 15); // Recordatorio 15 min antes
+            reminder1.put("minutes", Constants.RECORDATORIO_CALENDAR_MINUTOS);
             overrides.put(reminder1);
             JSONObject reminder2 = new JSONObject();
             reminder2.put("method", "popup");

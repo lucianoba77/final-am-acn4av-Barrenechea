@@ -21,6 +21,7 @@ import com.controlmedicamentos.myapplication.MainActivity;
 import com.controlmedicamentos.myapplication.R;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.receivers.TomaActionReceiver;
+import com.controlmedicamentos.myapplication.utils.Constants;
 
 import java.util.Calendar;
 
@@ -118,8 +119,8 @@ public class NotificationService {
                 if (vibratorManager != null) {
                     Vibrator vibrator = vibratorManager.getDefaultVibrator();
                     if (vibrator != null && vibrator.hasVibrator()) {
-                        // Patrón de vibración: esperar 0ms, vibrar 500ms, esperar 500ms, vibrar 500ms
-                        long[] pattern = {0, 500, 500, 500};
+                        // Patrón de vibración estándar
+                        long[] pattern = Constants.PATRON_VIBRACION_ESTANDAR;
                         builder.setVibrate(pattern);
                     }
                 }
@@ -287,7 +288,7 @@ public class NotificationService {
         // Configurar vibración más intensa para alerta roja
         boolean vibracionHabilitada = preferences.getBoolean("vibracion", true);
         if (vibracionHabilitada) {
-            long[] pattern = {0, 500, 200, 500, 200, 500}; // Patrón más intenso
+            long[] pattern = Constants.PATRON_VIBRACION_INTENSO;
             builder.setVibrate(pattern);
         }
         

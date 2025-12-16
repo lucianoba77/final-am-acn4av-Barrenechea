@@ -7,6 +7,7 @@ import android.util.Log;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
 import com.controlmedicamentos.myapplication.utils.Constants;
+import com.controlmedicamentos.myapplication.utils.ValidationUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -104,14 +105,36 @@ public class TomaTrackingService {
         List<TomaProgramada> tomas = new ArrayList<>();
         
         for (String horario : horarios) {
+            if (horario == null || horario.trim().isEmpty()) {
+                Log.w(TAG, "Horario null o vacío, omitiendo");
+                continue;
+            }
+            
             try {
-                String[] partes = horario.split(":");
-                if (partes.length != 2) {
+                // Validar formato antes de parsear
+                if (!ValidationUtils.isValidTime(horario)) {
+                    Log.w(TAG, "Formato de horario inválido: " + horario);
+                    continue;
+                }
+                
+                String[] partes = horario.split(Constants.SEPARADOR_HORA);
+                if (partes.length != Constants.PARTES_HORARIO_ESPERADAS) {
+                    Log.w(TAG, "Horario no tiene formato correcto (esperado HH:mm): " + horario);
                     continue;
                 }
                 
                 int hora = Integer.parseInt(partes[0]);
                 int minuto = Integer.parseInt(partes[1]);
+                
+                // Validar rango de hora y minuto
+                if (hora < 0 || hora > 23) {
+                    Log.w(TAG, "Hora fuera de rango (0-23): " + hora);
+                    continue;
+                }
+                if (minuto < 0 || minuto > 59) {
+                    Log.w(TAG, "Minuto fuera de rango (0-59): " + minuto);
+                    continue;
+                }
                 
                 Calendar fechaToma = (Calendar) hoy.clone();
                 fechaToma.set(Calendar.HOUR_OF_DAY, hora);
