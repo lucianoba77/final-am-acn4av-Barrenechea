@@ -8,11 +8,17 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import org.json.JSONObject;
 
 /**
  * Servicio para manejar la autenticación OAuth con Google Calendar
@@ -163,16 +169,115 @@ public class GoogleCalendarAuthService {
     }
     
     /**
-     * Renueva el token de acceso
-     * Nota: El flujo implícito no proporciona refresh_token, así que cuando expire
-     * el usuario necesitará reconectar. Esto es más simple y no requiere backend.
+     * Intercambia un serverAuthCode por un access_token
+     * @param serverAuthCode El código de autorización obtenido de Google Sign-In
+     * @param clientId El Client ID de Google OAuth
+     * @param clientSecret El Client Secret de Google OAuth (opcional, puede ser null)
+     * @param callback Callback para manejar el resultado
+     */
+    public void intercambiarAuthCodePorToken(String serverAuthCode, String clientId, String clientSecret, FirestoreCallback callback) {
+        new Thread(() -> {
+            try {
+                // Construir la URL y los parámetros
+                URL url = new URL("https://oauth2.googleapis.com/token");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                conn.setDoOutput(true);
+                
+                // Construir el cuerpo de la petición
+                String redirectUri = "com.controlmedicamentos.myapplication://googlecalendar";
+                String postData = "code=" + java.net.URLEncoder.encode(serverAuthCode, "UTF-8") +
+                    "&client_id=" + java.net.URLEncoder.encode(clientId, "UTF-8") +
+                    "&redirect_uri=" + java.net.URLEncoder.encode(redirectUri, "UTF-8") +
+                    "&grant_type=authorization_code";
+                
+                // Si hay client_secret, agregarlo (aunque no es lo más seguro, es necesario para el intercambio)
+                if (clientSecret != null && !clientSecret.isEmpty()) {
+                    postData += "&client_secret=" + java.net.URLEncoder.encode(clientSecret, "UTF-8");
+                }
+                
+                // Enviar la petición
+                OutputStream os = conn.getOutputStream();
+                os.write(postData.getBytes("UTF-8"));
+                os.flush();
+                os.close();
+                
+                // Leer la respuesta
+                int responseCode = conn.getResponseCode();
+                BufferedReader in = new BufferedReader(new InputStreamReader(
+                    responseCode == 200 ? conn.getInputStream() : conn.getErrorStream()));
+                StringBuilder response = new StringBuilder();
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                
+                if (responseCode == 200) {
+                    // Parsear la respuesta JSON
+                    JSONObject jsonResponse = new JSONObject(response.toString());
+                    String accessToken = jsonResponse.getString("access_token");
+                    String tokenType = jsonResponse.optString("token_type", "Bearer");
+                    int expiresIn = jsonResponse.optInt("expires_in", 3600);
+                    String refreshToken = jsonResponse.optString("refresh_token", null);
+                    
+                    // Preparar los datos del token para guardar
+                    Map<String, Object> tokenData = new HashMap<>();
+                    tokenData.put("access_token", accessToken);
+                    tokenData.put("token_type", tokenType);
+                    tokenData.put("expires_in", expiresIn);
+                    if (refreshToken != null && !refreshToken.isEmpty()) {
+                        tokenData.put("refresh_token", refreshToken);
+                    }
+                    
+                    // Calcular fechas
+                    SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+                    isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                    Date ahora = new Date();
+                    tokenData.put("fechaObtencion", isoFormat.format(ahora));
+                    Date fechaExpiracion = new Date(ahora.getTime() + (expiresIn * 1000L));
+                    tokenData.put("fechaExpiracion", isoFormat.format(fechaExpiracion));
+                    
+                    Log.d(TAG, "Token intercambiado exitosamente");
+                    if (callback != null) {
+                        callback.onSuccess(tokenData);
+                    }
+                } else {
+                    String errorMsg = "Error al intercambiar código por token: " + responseCode + " - " + response.toString();
+                    Log.e(TAG, errorMsg);
+                    if (callback != null) {
+                        callback.onError(new Exception(errorMsg));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error al intercambiar auth code por token", e);
+                if (callback != null) {
+                    callback.onError(e);
+                }
+            }
+        }).start();
+    }
+    
+    /**
+     * Renueva el token de acceso usando refresh_token
      */
     private void renovarTokenGoogle(Map<String, Object> tokenDataAntiguo, FirestoreCallback callback) {
-        // El flujo OAuth implícito no proporciona refresh_token
-        // Cuando el token expire, el usuario necesitará reconectar
-        Log.d(TAG, "Token expirado. El usuario necesitará reconectar Google Calendar.");
+        Object refreshTokenObj = tokenDataAntiguo != null ? tokenDataAntiguo.get("refresh_token") : null;
+        if (refreshTokenObj == null) {
+            Log.d(TAG, "No hay refresh_token disponible. El usuario necesitará reconectar Google Calendar.");
+            if (callback != null) {
+                callback.onSuccess(null); // Retornar null para indicar que necesita reconectar
+            }
+            return;
+        }
+        
+        String refreshToken = refreshTokenObj.toString();
+        // TODO: Implementar renovación usando refresh_token si es necesario
+        // Por ahora, retornar null para indicar que necesita reconectar
+        Log.d(TAG, "Renovación de token no implementada aún. El usuario necesitará reconectar.");
         if (callback != null) {
-            callback.onSuccess(null); // Retornar null para indicar que necesita reconectar
+            callback.onSuccess(null);
         }
     }
     

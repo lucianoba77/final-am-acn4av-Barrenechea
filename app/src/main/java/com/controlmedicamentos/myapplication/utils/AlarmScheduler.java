@@ -185,8 +185,7 @@ public class AlarmScheduler {
                 } catch (Exception e) {
                     Log.e(TAG, "Error al programar alerta amarilla para día " + dia + ": " + medicamento.getNombre(), e);
                     // Si hay error (por ejemplo, límite alcanzado), detener la programación
-                    if (e instanceof IllegalStateException && e.getMessage() != null && 
-                        e.getMessage().contains("Maximum limit")) {
+                    if (esLimiteAlarmasAlcanzado(e)) {
                         Log.w(TAG, "Límite de alarmas alcanzado. Deteniendo programación de alarmas adicionales.");
                         break;
                     }
@@ -208,8 +207,7 @@ public class AlarmScheduler {
                 } catch (Exception e) {
                     Log.e(TAG, "Error al programar alarma para día " + dia + ": " + medicamento.getNombre(), e);
                     // Si hay error (por ejemplo, límite alcanzado), detener la programación
-                    if (e instanceof IllegalStateException && e.getMessage() != null && 
-                        e.getMessage().contains("Maximum limit")) {
+                    if (esLimiteAlarmasAlcanzado(e)) {
                         Log.w(TAG, "Límite de alarmas alcanzado. Deteniendo programación de alarmas adicionales.");
                         break;
                     }
@@ -241,8 +239,7 @@ public class AlarmScheduler {
                 } catch (Exception e) {
                     Log.e(TAG, "Error al programar alerta amarilla para día " + dia + ": " + medicamento.getNombre(), e);
                     // Si hay error (por ejemplo, límite alcanzado), detener la programación
-                    if (e instanceof IllegalStateException && e.getMessage() != null && 
-                        e.getMessage().contains("Maximum limit")) {
+                    if (esLimiteAlarmasAlcanzado(e)) {
                         Log.w(TAG, "Límite de alarmas alcanzado. Deteniendo programación de alarmas adicionales.");
                         break;
                     }
@@ -264,8 +261,7 @@ public class AlarmScheduler {
                 } catch (Exception e) {
                     Log.e(TAG, "Error al programar alarma para día " + dia + ": " + medicamento.getNombre(), e);
                     // Si hay error (por ejemplo, límite alcanzado), detener la programación
-                    if (e instanceof IllegalStateException && e.getMessage() != null && 
-                        e.getMessage().contains("Maximum limit")) {
+                    if (esLimiteAlarmasAlcanzado(e)) {
                         Log.w(TAG, "Límite de alarmas alcanzado. Deteniendo programación de alarmas adicionales.");
                         break;
                     }
@@ -334,6 +330,38 @@ public class AlarmScheduler {
     }
     
     /**
+     * Verifica si una excepción indica que se alcanzó el límite de alarmas del sistema.
+     * Verifica tanto la excepción directa como su causa (si está envuelta en RuntimeException).
+     * 
+     * @param e La excepción a verificar
+     * @return true si la excepción indica que se alcanzó el límite de alarmas
+     */
+    private boolean esLimiteAlarmasAlcanzado(Exception e) {
+        if (e == null) {
+            return false;
+        }
+        
+        // Verificar el mensaje de la excepción directa
+        String mensaje = e.getMessage();
+        if (mensaje != null && mensaje.contains("Maximum limit")) {
+            return true;
+        }
+        
+        // Si es RuntimeException, verificar la causa (excepción original)
+        if (e instanceof RuntimeException) {
+            Throwable causa = e.getCause();
+            if (causa != null) {
+                String mensajeCausa = causa.getMessage();
+                if (mensajeCausa != null && mensajeCausa.contains("Maximum limit")) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
      * Programa una alarma usando el método apropiado según la versión de Android
      */
     private void programarAlarma(long timeInMillis, PendingIntent pendingIntent) {
@@ -367,6 +395,12 @@ public class AlarmScheduler {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error inesperado al programar alarma", e);
+            // Si es un error de límite de alarmas, re-lanzarlo como IllegalStateException
+            // para que sea detectado correctamente por el código que llama
+            if (e.getMessage() != null && e.getMessage().contains("Maximum limit")) {
+                IllegalStateException limiteException = new IllegalStateException("Maximum limit of concurrent alarms 500 reached", e);
+                throw limiteException;
+            }
             throw new RuntimeException(e);
         }
     }

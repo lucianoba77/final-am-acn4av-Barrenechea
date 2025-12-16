@@ -24,6 +24,14 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.controlmedicamentos.myapplication.R;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
+import androidx.annotation.NonNull;
+import java.util.HashMap;
+import java.util.Map;
 
 public class AjustesActivity extends AppCompatActivity {
 
@@ -39,6 +47,7 @@ public class AjustesActivity extends AppCompatActivity {
     private TextView tvCalendarStatus, tvCalendarInfo;
     private MaterialButton btnConectarGoogleCalendar, btnDesconectarGoogleCalendar;
     private boolean googleCalendarConectado = false;
+    private static final int RC_GOOGLE_CALENDAR_SIGN_IN = 9002;
     
     private SharedPreferences preferences;
     private int diasAntelacionStock = 3;
@@ -46,6 +55,7 @@ public class AjustesActivity extends AppCompatActivity {
     private com.controlmedicamentos.myapplication.services.AuthService authService;
     private com.controlmedicamentos.myapplication.services.FirebaseService firebaseService;
     private com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService googleCalendarAuthService;
+    private GoogleSignInClient googleCalendarSignInClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +82,12 @@ public class AjustesActivity extends AppCompatActivity {
         authService = new com.controlmedicamentos.myapplication.services.AuthService();
         firebaseService = new com.controlmedicamentos.myapplication.services.FirebaseService();
         googleCalendarAuthService = new com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService(this);
+        
+        // Inicializar Google Sign-In para Calendar
+        String webClientId = getString(R.string.default_web_client_id);
+        if (webClientId != null && !webClientId.isEmpty()) {
+            googleCalendarSignInClient = authService.initializeGoogleSignInForCalendar(this, webClientId);
+        }
 
         inicializarVistas();
         cargarDatosUsuario(); // Cargar desde Firebase
@@ -749,51 +765,37 @@ public class AjustesActivity extends AppCompatActivity {
     }
     
     /**
-     * Conecta Google Calendar usando OAuth 2.0 implícito (sin backend)
-     * Usa Custom Tabs para abrir la URL de autorización de Google
-     * El callback se maneja en GoogleCalendarCallbackActivity
+     * Conecta Google Calendar usando Google Sign-In con requestServerAuthCode
+     * Este método usa el flujo que funcionaba anteriormente
      */
     private void conectarGoogleCalendar() {
-        try {
-            String clientId = getString(R.string.default_web_client_id);
-            
-            // Validar que el client ID esté configurado
-            if (clientId == null || clientId.isEmpty()) {
+        if (googleCalendarSignInClient == null) {
+            String webClientId = getString(R.string.default_web_client_id);
+            if (webClientId == null || webClientId.isEmpty()) {
                 Toast.makeText(this, 
                     "Error: Client ID no configurado. Verifica la configuración de la app.",
                     Toast.LENGTH_LONG).show();
                 Logger.e("AjustesActivity", "Client ID no configurado");
                 return;
             }
-            
-            // Construir URL de autorización OAuth 2.0 implícito
-            String redirectUri = "com.controlmedicamentos.myapplication://googlecalendar";
-            String scope = "https://www.googleapis.com/auth/calendar.events";
-            
-            String authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
-                "client_id=" + java.net.URLEncoder.encode(clientId, "UTF-8") +
-                "&redirect_uri=" + java.net.URLEncoder.encode(redirectUri, "UTF-8") +
-                "&response_type=token" +  // Flujo implícito: devuelve access_token directamente
-                "&scope=" + java.net.URLEncoder.encode(scope, "UTF-8") +
-                "&include_granted_scopes=true";
-            
-            Logger.d("AjustesActivity", "Iniciando OAuth implícito para Google Calendar");
-            
-            // Abrir URL en Custom Tabs
-            android.net.Uri uri = android.net.Uri.parse(authUrl);
-            androidx.browser.customtabs.CustomTabsIntent.Builder builder = 
-                new androidx.browser.customtabs.CustomTabsIntent.Builder();
-            builder.setShowTitle(true);
-            androidx.browser.customtabs.CustomTabsIntent customTabsIntent = builder.build();
-            customTabsIntent.launchUrl(this, uri);
-            
-        } catch (Exception e) {
-            Logger.e("AjustesActivity", "Error al iniciar OAuth para Google Calendar", e);
-            Toast.makeText(this, 
-                "Error al conectar con Google Calendar: " + 
-                (e.getMessage() != null ? e.getMessage() : "Error desconocido"),
-                Toast.LENGTH_LONG).show();
+            googleCalendarSignInClient = authService.initializeGoogleSignInForCalendar(this, webClientId);
+            if (googleCalendarSignInClient == null) {
+                Toast.makeText(this, 
+                    "Error: No se pudo inicializar Google Sign-In. Verifica que Google Play Services esté instalado.",
+                    Toast.LENGTH_LONG).show();
+                return;
+            }
         }
+        
+        // Hacer signOut primero para forzar el selector de cuenta
+        googleCalendarSignInClient.signOut().addOnCompleteListener(new com.google.android.gms.tasks.OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull com.google.android.gms.tasks.Task<Void> task) {
+                // Obtener el Intent de Google Sign-In
+                Intent signInIntent = googleCalendarSignInClient.getSignInIntent();
+                startActivityForResult(signInIntent, RC_GOOGLE_CALENDAR_SIGN_IN);
+            }
+        });
     }
     
     /**
@@ -834,29 +836,130 @@ public class AjustesActivity extends AppCompatActivity {
     }
     
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == RC_GOOGLE_CALENDAR_SIGN_IN) {
+            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+            try {
+                GoogleSignInAccount account = task.getResult(ApiException.class);
+                if (account != null) {
+                    String serverAuthCode = account.getServerAuthCode();
+                    if (serverAuthCode != null && !serverAuthCode.isEmpty()) {
+                        Logger.d("AjustesActivity", "Server Auth Code obtenido, intercambiando por access token...");
+                        intercambiarAuthCodePorToken(serverAuthCode);
+                    } else {
+                        Logger.e("AjustesActivity", "No se obtuvo serverAuthCode de Google Sign-In");
+                        Toast.makeText(this, 
+                            "Error: No se pudo obtener el código de autorización de Google.",
+                            Toast.LENGTH_LONG).show();
+                    }
+                }
+            } catch (ApiException e) {
+                Logger.e("AjustesActivity", "Error en Google Sign-In para Calendar", e);
+                String mensaje = "Error al conectar con Google Calendar: ";
+                if (e.getStatusCode() == 12500) {
+                    mensaje += "Google Play Services no está disponible";
+                } else if (e.getStatusCode() == 10) {
+                    mensaje += "Error de desarrollo. Verifica la configuración.";
+                } else {
+                    mensaje += e.getMessage();
+                }
+                Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+    
+    /**
+     * Intercambia el serverAuthCode por un access_token
+     */
+    private void intercambiarAuthCodePorToken(String serverAuthCode) {
+        String clientId = getString(R.string.default_web_client_id);
+        // Intentar obtener client_secret (puede no estar configurado)
+        String clientSecret = null;
+        try {
+            int clientSecretResId = getResources().getIdentifier("google_oauth_client_secret", "string", getPackageName());
+            if (clientSecretResId != 0) {
+                clientSecret = getString(clientSecretResId);
+            }
+        } catch (Exception e) {
+            Logger.d("AjustesActivity", "Client secret no configurado (opcional)");
+        }
+        
+        Logger.d("AjustesActivity", "Intercambiando serverAuthCode por access_token...");
+        
+        // Intercambiar el código por el token
+        googleCalendarAuthService.intercambiarAuthCodePorToken(serverAuthCode, clientId, clientSecret,
+            new com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService.FirestoreCallback() {
+                @Override
+                public void onSuccess(Object result) {
+                    if (result != null && result instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> tokenData = (Map<String, Object>) result;
+                        
+                        // Guardar el token en Firestore
+                        googleCalendarAuthService.guardarTokenGoogle(tokenData, 
+                            new com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService.FirestoreCallback() {
+                                @Override
+                                public void onSuccess(Object saveResult) {
+                                    Logger.d("AjustesActivity", "Token guardado exitosamente");
+                                    runOnUiThread(() -> {
+                                        googleCalendarConectado = true;
+                                        actualizarUIGoogleCalendar();
+                                        Toast.makeText(AjustesActivity.this, 
+                                            "Google Calendar conectado exitosamente", 
+                                            Toast.LENGTH_SHORT).show();
+                                    });
+                                }
+                                
+                                @Override
+                                public void onError(Exception exception) {
+                                    Logger.e("AjustesActivity", "Error al guardar token", exception);
+                                    runOnUiThread(() -> {
+                                        Toast.makeText(AjustesActivity.this, 
+                                            "Error al guardar el token: " + 
+                                            (exception != null ? exception.getMessage() : "Error desconocido"), 
+                                            Toast.LENGTH_LONG).show();
+                                    });
+                                }
+                            });
+                    } else {
+                        Logger.e("AjustesActivity", "No se obtuvo token del intercambio");
+                        runOnUiThread(() -> {
+                            Toast.makeText(AjustesActivity.this, 
+                                "Error: No se pudo obtener el token de acceso.", 
+                                Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+                
+                @Override
+                public void onError(Exception exception) {
+                    Logger.e("AjustesActivity", "Error al intercambiar auth code por token", exception);
+                    runOnUiThread(() -> {
+                        String mensaje = "Error al conectar con Google Calendar: ";
+                        if (exception != null && exception.getMessage() != null) {
+                            if (exception.getMessage().contains("invalid_grant")) {
+                                mensaje += "El código de autorización ha expirado o ya fue usado. Intenta nuevamente.";
+                            } else if (exception.getMessage().contains("invalid_client")) {
+                                mensaje += "Client ID o Client Secret incorrectos. Verifica la configuración.";
+                            } else {
+                                mensaje += exception.getMessage();
+                            }
+                        } else {
+                            mensaje += "Error desconocido";
+                        }
+                        Toast.makeText(AjustesActivity.this, mensaje, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+    }
+    
+    @Override
     protected void onResume() {
         super.onResume();
         
-        // Verificar si venimos de GoogleCalendarCallbackActivity con conexión exitosa
-        Intent intent = getIntent();
-        if (intent != null && intent.getBooleanExtra("google_calendar_conectado", false)) {
-            // Si se conectó exitosamente, actualizar UI directamente y verificar después de un delay
-            googleCalendarConectado = true;
-            actualizarUIGoogleCalendar();
-            
-            // Verificar después de un delay para asegurar que el token esté disponible
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    verificarConexionGoogleCalendar();
-                }
-            }, 1000); // Esperar 1 segundo para que Firestore complete la escritura
-            
-            // Limpiar el extra para que no se ejecute en próximos onResume
-            intent.removeExtra("google_calendar_conectado");
-        } else {
-            // Verificar conexión normalmente cuando la actividad vuelve a primer plano
-            verificarConexionGoogleCalendar();
-        }
+        // Verificar conexión cuando la actividad vuelve a primer plano
+        verificarConexionGoogleCalendar();
     }
 }

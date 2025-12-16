@@ -453,6 +453,48 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         Logger.d(TAG, String.format("separarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
             medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
         
+        // VERIFICACIÓN CRÍTICA: Asegurar que TODOS los medicamentos estén en alguna sección
+        int totalEnSecciones = medicamentosTratamiento.size() + medicamentosTratamientoSinStock.size() + medicamentosOcasionales.size();
+        int totalRecibidos = todosLosMedicamentos.size();
+        int medicamentosNull = 0;
+        for (Medicamento m : todosLosMedicamentos) {
+            if (m == null) medicamentosNull++;
+        }
+        int totalValidos = totalRecibidos - medicamentosNull;
+        
+        if (totalEnSecciones != totalValidos) {
+            Logger.e(TAG, "separarMedicamentos: ❌ ERROR CRÍTICO - Medicamentos perdidos en la separación!");
+            Logger.e(TAG, "separarMedicamentos: Total recibidos: " + totalRecibidos + 
+                ", Null: " + medicamentosNull + 
+                ", Válidos: " + totalValidos + 
+                ", En secciones: " + totalEnSecciones);
+            
+            // Identificar qué medicamentos no están en ninguna sección
+            Set<String> idsEnSecciones = new HashSet<>();
+            for (Medicamento m : medicamentosTratamiento) {
+                if (m != null) idsEnSecciones.add(m.getId());
+            }
+            for (Medicamento m : medicamentosTratamientoSinStock) {
+                if (m != null) idsEnSecciones.add(m.getId());
+            }
+            for (Medicamento m : medicamentosOcasionales) {
+                if (m != null) idsEnSecciones.add(m.getId());
+            }
+            
+            List<String> medicamentosPerdidos = new ArrayList<>();
+            for (Medicamento m : todosLosMedicamentos) {
+                if (m != null && !idsEnSecciones.contains(m.getId())) {
+                    medicamentosPerdidos.add(m.getNombre() + " (ID: " + m.getId() + ")");
+                }
+            }
+            
+            if (!medicamentosPerdidos.isEmpty()) {
+                Logger.e(TAG, "separarMedicamentos: ❌ Medicamentos NO asignados a ninguna sección: " + medicamentosPerdidos.toString());
+            }
+        } else {
+            Logger.d(TAG, "separarMedicamentos: ✅ Todos los medicamentos válidos están en alguna sección");
+        }
+        
         // Log adicional para comparar con dashboard
         int medicamentosPausados = 0;
         int medicamentosInactivos = 0;
