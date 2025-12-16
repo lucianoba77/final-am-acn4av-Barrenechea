@@ -9,6 +9,10 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
@@ -45,6 +49,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     private MaterialButton btnNavHome;
     private MaterialButton btnNavNuevaMedicina;
     private MaterialButton btnNavBotiquin;
+    private MaterialButton btnNavHistorial;
     private MaterialButton btnNavAjustes;
     
     private AuthService authService;
@@ -53,7 +58,18 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Configurar barra de estado para que sea visible
+        configurarBarraEstado();
+        
         setContentView(R.layout.activity_botiquin);
+        
+        // Aplicar window insets al header para respetar la barra de estado
+        // Usar post para asegurar que se ejecute después del layout
+        View headerLayout = findViewById(R.id.headerLayout);
+        if (headerLayout != null) {
+            headerLayout.post(() -> aplicarWindowInsets(headerLayout));
+        }
 
         // Ocultar ActionBar
         if (getSupportActionBar() != null) {
@@ -86,6 +102,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         btnNavHome = findViewById(R.id.btnNavHome);
         btnNavNuevaMedicina = findViewById(R.id.btnNavNuevaMedicina);
         btnNavBotiquin = findViewById(R.id.btnNavBotiquin);
+        btnNavHistorial = findViewById(R.id.btnNavHistorial);
         btnNavAjustes = findViewById(R.id.btnNavAjustes);
     }
 
@@ -118,6 +135,12 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         
         btnNavBotiquin.setOnClickListener(v -> {
             // Ya estamos en botiquín
+        });
+        
+        btnNavHistorial.setOnClickListener(v -> {
+            Intent intent = new Intent(BotiquinActivity.this, HistorialActivity.class);
+            startActivity(intent);
+            finish();
         });
         
         btnNavAjustes.setOnClickListener(v -> {
@@ -340,6 +363,81 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         medicamento.setStockActual(stockAnterior);
         medicamento.setDiasRestantesDuracion(diasRestantesAnteriores);
         medicamento.setPausado(estabaPausado);
+    }
+
+    /**
+     * Configura la barra de estado para que sea visible
+     */
+    private void configurarBarraEstado() {
+        android.view.Window window = getWindow();
+        
+        // Asegurar que la barra de estado sea visible
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // Limpiar cualquier flag que pueda ocultar la barra de estado
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            
+            // Habilitar dibujo de la barra de estado
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            
+            // Establecer color de la barra de estado
+            window.setStatusBarColor(getResources().getColor(R.color.primary_dark));
+        }
+        
+        // Configurar apariencia de la barra de estado
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // API 30+
+            WindowInsetsControllerCompat controller = 
+                WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller != null) {
+                controller.setAppearanceLightStatusBars(false);
+                // Asegurar que la barra de estado sea visible
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
+            }
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            // API 23-29
+            int flags = window.getDecorView().getSystemUiVisibility();
+            // Limpiar flags que oculten la barra de estado
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            window.getDecorView().setSystemUiVisibility(flags);
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // API 21-22
+            int flags = window.getDecorView().getSystemUiVisibility();
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            window.getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+    
+    /**
+     * Aplica window insets al header para respetar la barra de estado
+     */
+    private void aplicarWindowInsets(View headerLayout) {
+        ViewCompat.setOnApplyWindowInsetsListener(headerLayout, 
+            (v, insets) -> {
+                int statusBarHeight = insets.getInsets(
+                    WindowInsetsCompat.Type.statusBars()).top;
+                int paddingHorizontal = getResources().getDimensionPixelSize(R.dimen.padding_medium);
+                int paddingVertical = getResources().getDimensionPixelSize(R.dimen.padding_medium);
+                
+                // Aplicar padding con la altura de la barra de estado
+                v.setPadding(
+                    paddingHorizontal,
+                    statusBarHeight + paddingVertical,
+                    paddingHorizontal,
+                    paddingVertical
+                );
+                
+                // Asegurar que el layout se actualice
+                v.requestLayout();
+                
+                return insets;
+            });
+        
+        // Forzar aplicación inmediata de insets
+        ViewCompat.requestApplyInsets(headerLayout);
     }
 
     @Override

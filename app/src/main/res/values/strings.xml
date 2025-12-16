@@ -163,6 +163,10 @@
     <string name="adherence_plan_summary">Promedio general: %1$d%% • %2$d/%3$d tomas cumplidas</string>
     <string name="adherence_weekly_chart_title">Adherencia semanal</string>
     <string name="adherence_monthly_chart_title">Adherencia mensual (últimas 4 semanas)</string>
+    <string name="patient_adherence_history_title">Historial Completo de Adherencia</string>
+    <string name="patient_adherence_summary">Adherencia General: %1$d%% (%2$d/%3$d tomas)</string>
+    <string name="patient_adherence_weekly_title">Adherencia Semanal (Últimas 4 semanas)</string>
+    <string name="patient_adherence_monthly_title">Adherencia Mensual (Últimos 6 meses)</string>
     <string name="completed_treatments_title">Tratamientos Concluidos</string>
     <string name="treatment_start_date">Fecha de inicio</string>
     <string name="treatment_end_date">Fecha de fin</string>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conectando Google Calendar...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Conectando Google Calendar...</h2>
+        <div class="spinner"></div>
+        <p>Redirigiendo a la aplicación...</p>
+    </div>
+    <script>
+        // Obtener el fragment de la URL (contiene el access_token)
+        const fragment = window.location.hash.substring(1);
+        
+        // Parsear los parámetros del fragment
+        const params = {};
+        fragment.split('&').forEach(param => {
+            const [key, value] = param.split('=');
+            if (key && value) {
+                params[decodeURIComponent(key)] = decodeURIComponent(value);
+            }
+        });
+        
+        // Construir el deep link con el token
+        const accessToken = params.access_token;
+        const tokenType = params.token_type || 'Bearer';
+        const expiresIn = params.expires_in || '3600';
+        
+        if (accessToken) {
+            // Redirigir a la app usando el deep link
+            const deepLink = 'com.controlmedicamentos.myapplication://googlecalendar?' + 
+                'access_token=' + encodeURIComponent(accessToken) +
+                '&token_type=' + encodeURIComponent(tokenType) +
+                '&expires_in=' + encodeURIComponent(expiresIn);
+            
+            // Intentar abrir la app
+            window.location.href = deepLink;
+            
+            // Si no se abre la app en 2 segundos, mostrar mensaje
+            setTimeout(() => {
+                document.querySelector('.container').innerHTML = 
+                    '<h2>Por favor, abre la aplicación manualmente</h2>' +
+                    '<p>Si la aplicación no se abrió automáticamente, vuelve a la aplicación y verifica la conexión.</p>';
+            }, 2000);
+        } else {
+            // Si hay un error, mostrarlo
+            const error = params.error || 'Error desconocido';
+            const errorDescription = params.error_description || '';
+            
+            document.querySelector('.container').innerHTML = 
+                '<h2>Error al conectar</h2>' +
+                '<p>' + error + '</p>' +
+                (errorDescription ? '<p>' + errorDescription + '</p>' : '') +
+                '<p>Por favor, cierra esta ventana e intenta nuevamente desde la aplicación.</p>';
+        }
+    </script>
+</body>
+</html>
+

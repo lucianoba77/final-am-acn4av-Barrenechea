@@ -8,6 +8,10 @@ import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
@@ -32,7 +36,7 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
     private static final String TAG = "MainActivity";
     private RecyclerView rvMedicamentos;
     // Botones de navegación
-    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavAjustes;
+    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     private ProgressBar progressBar;
     private MedicamentoAdapter adapter;
     private List<Medicamento> medicamentos;
@@ -46,6 +50,9 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // Configurar barra de estado para que sea visible
+        configurarBarraEstado();
+        
         // Ocultar ActionBar/Toolbar para que no muestre el título duplicado
         if (getSupportActionBar() != null) {
             getSupportActionBar().hide();
@@ -53,6 +60,13 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         
         try {
             setContentView(R.layout.activity_main);
+            
+            // Aplicar window insets al header para respetar la barra de estado
+            // Usar post para asegurar que se ejecute después del layout
+            View headerLayout = findViewById(R.id.headerLayout);
+            if (headerLayout != null) {
+                headerLayout.post(() -> aplicarWindowInsets(headerLayout));
+            }
 
             // Inicializar servicios
             authService = new AuthService();
@@ -106,6 +120,81 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         }
     }
 
+    /**
+     * Configura la barra de estado para que sea visible
+     */
+    private void configurarBarraEstado() {
+        android.view.Window window = getWindow();
+        
+        // Asegurar que la barra de estado sea visible
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // Limpiar cualquier flag que pueda ocultar la barra de estado
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            
+            // Habilitar dibujo de la barra de estado
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            
+            // Establecer color de la barra de estado
+            window.setStatusBarColor(getResources().getColor(R.color.primary_dark));
+        }
+        
+        // Configurar apariencia de la barra de estado
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // API 30+
+            WindowInsetsControllerCompat controller = 
+                WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller != null) {
+                controller.setAppearanceLightStatusBars(false);
+                // Asegurar que la barra de estado sea visible
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
+            }
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            // API 23-29
+            int flags = window.getDecorView().getSystemUiVisibility();
+            // Limpiar flags que oculten la barra de estado
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            window.getDecorView().setSystemUiVisibility(flags);
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // API 21-22
+            int flags = window.getDecorView().getSystemUiVisibility();
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            window.getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+    
+    /**
+     * Aplica window insets al header para respetar la barra de estado
+     */
+    private void aplicarWindowInsets(View headerLayout) {
+        ViewCompat.setOnApplyWindowInsetsListener(headerLayout, 
+            (v, insets) -> {
+                int statusBarHeight = insets.getInsets(
+                    WindowInsetsCompat.Type.statusBars()).top;
+                int paddingHorizontal = getResources().getDimensionPixelSize(R.dimen.padding_medium);
+                int paddingVertical = getResources().getDimensionPixelSize(R.dimen.padding_medium);
+                
+                // Aplicar padding con la altura de la barra de estado
+                v.setPadding(
+                    paddingHorizontal,
+                    statusBarHeight + paddingVertical,
+                    paddingHorizontal,
+                    paddingVertical
+                );
+                
+                // Asegurar que el layout se actualice
+                v.requestLayout();
+                
+                return insets;
+            });
+        
+        // Forzar aplicación inmediata de insets
+        ViewCompat.requestApplyInsets(headerLayout);
+    }
+
     private void irALogin() {
         Intent intent = new Intent(this, LoginActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -120,6 +209,7 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             btnNavHome = findViewById(R.id.btnNavHome);
             btnNavNuevaMedicina = findViewById(R.id.btnNavNuevaMedicina);
             btnNavBotiquin = findViewById(R.id.btnNavBotiquin);
+            btnNavHistorial = findViewById(R.id.btnNavHistorial);
             btnNavAjustes = findViewById(R.id.btnNavAjustes);
             
             // Verificar que las vistas críticas existan
@@ -177,30 +267,183 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
                         medicamentos = new ArrayList<>();
                     }
                     
+                    Log.d(TAG, "Carga inicial: " + medicamentos.size() + " medicamentos cargados desde Firebase");
+                    
                     // Inicializar tomas del día para cada medicamento
                     for (Medicamento med : medicamentos) {
+                        Log.d(TAG, "Inicializando tomas para: " + med.getNombre() + 
+                              " (ID: " + med.getId() + ", activo: " + med.isActivo() + 
+                              ", tomasDiarias: " + med.getTomasDiarias() + 
+                              ", horarioPrimeraToma: " + med.getHorarioPrimeraToma() + ")");
                         tomaTrackingService.inicializarTomasDia(med);
                     }
                     
+                    // Marcar tomas omitidas después de las 01:01hs
+                    tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
+                    
                     // Filtrar medicamentos: solo mostrar en dashboard los que tienen
-                    // tomas diarias > 0 y horario configurado (medicamentos regulares)
+                    // tomas diarias > 0, horario configurado y tomas pendientes
                     // Lógica consistente con React: DashboardScreen.jsx líneas 19-23
                     List<Medicamento> medicamentosParaDashboard = new ArrayList<>();
+                    Calendar ahora = Calendar.getInstance();
+                    int horaActual = ahora.get(Calendar.HOUR_OF_DAY);
+                    int minutoActual = ahora.get(Calendar.MINUTE);
+                    
+                    Log.d(TAG, "Filtrando medicamentos. Hora actual: " + horaActual + ":" + minutoActual);
+                    
                     for (Medicamento med : medicamentos) {
-                        // Mostrar solo si:
-                        // 1. activo !== false (activo es true o no está definido)
-                        // 2. tomasDiarias > 0
-                        // 3. primeraToma está definida (no null, no vacío, no "00:00")
-                        if ((med.isActivo()) && 
-                            med.getTomasDiarias() > 0 && 
-                            med.getHorarioPrimeraToma() != null && 
-                            !med.getHorarioPrimeraToma().isEmpty() &&
-                            !med.getHorarioPrimeraToma().equals("00:00")) {
-                            medicamentosParaDashboard.add(med);
+                        // Verificar condiciones básicas
+                        if (!med.isActivo()) {
+                            Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no está activo");
+                            continue;
                         }
-                        // Los medicamentos ocasionales (tomasDiarias = 0) no aparecen aquí,
-                        // solo en el botiquín
+                        if (med.getTomasDiarias() <= 0) {
+                            Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: tomasDiarias <= 0");
+                            continue;
+                        }
+                        if (med.getHorarioPrimeraToma() == null || med.getHorarioPrimeraToma().isEmpty()) {
+                            Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: horarioPrimeraToma vacío");
+                            continue;
+                        }
+                        if (med.getHorarioPrimeraToma().equals("00:00")) {
+                            Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: horarioPrimeraToma es 00:00");
+                            continue;
+                        }
+                        
+                        // Obtener tomas del medicamento
+                        List<TomaProgramada> tomasMedicamento = tomaTrackingService.obtenerTomasMedicamento(med.getId());
+                        Log.d(TAG, "Medicamento " + med.getNombre() + ": " + 
+                              (tomasMedicamento != null ? tomasMedicamento.size() : 0) + " tomas obtenidas");
+                        
+                        // Si no hay tomas inicializadas, el medicamento es nuevo o no se inicializó correctamente
+                        // En este caso, mostrarlo si tiene horario válido (medicamento recién creado)
+                        if (tomasMedicamento == null || tomasMedicamento.isEmpty()) {
+                            Log.d(TAG, "Medicamento " + med.getNombre() + " sin tomas inicializadas, agregando al dashboard");
+                            medicamentosParaDashboard.add(med);
+                            continue;
+                        }
+                        
+                        // Verificar si completó todas las tomas del día
+                        boolean completoTodas = tomaTrackingService.completoTodasLasTomasDelDia(med.getId());
+                        Log.d(TAG, "Medicamento " + med.getNombre() + ": completó todas las tomas = " + completoTodas);
+                        if (completoTodas) {
+                            Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: completó todas las tomas");
+                            continue; // Ya completó todas las tomas, ocultar del dashboard
+                        }
+                        
+                        // Verificar si tiene tomas posponibles (después de las 00:00hs hasta las 01:00hs)
+                        // Si es después de las 00:00hs y antes de las 01:01hs, solo mostrar si tiene tomas posponibles
+                        if ((horaActual == 0 && minutoActual >= 1) || (horaActual == 1 && minutoActual == 0)) {
+                            // Solo mostrar si tiene tomas de las 00:00hs que pueden posponerse
+                            if (!tomaTrackingService.tieneTomasPosponibles(med.getId())) {
+                                Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no tiene tomas posponibles entre 00:01-01:00");
+                                continue; // No tiene tomas posponibles, ocultar
+                            }
+                                } else if (horaActual >= 1 && minutoActual >= 1) {
+                                    // Después de las 01:01hs, verificar si tiene tomas válidas (futuras o pasadas menos de 1 hora)
+                                    boolean tieneTomasValidas = false;
+                                    for (TomaProgramada toma : tomasMedicamento) {
+                                        Calendar fechaToma = Calendar.getInstance();
+                                        fechaToma.setTime(toma.getFechaHoraProgramada());
+                                        
+                                        // Verificar que la toma sea del día actual
+                                        boolean esDelDiaActual = fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
+                                                               fechaToma.get(Calendar.DAY_OF_YEAR) == ahora.get(Calendar.DAY_OF_YEAR);
+                                        
+                                        if (!esDelDiaActual || toma.isTomada() || 
+                                            toma.getEstado() == TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+                                            continue;
+                                        }
+                                        
+                                        // Verificar si es futura
+                                        boolean esFutura = fechaToma.after(ahora);
+                                        
+                                        // Si es pasada, verificar que no haya pasado más de 1 hora
+                                        boolean esValida = false;
+                                        if (esFutura) {
+                                            esValida = true;
+                                        } else {
+                                            // Es pasada, verificar límite de 1 hora
+                                            Calendar fechaLimite = (Calendar) fechaToma.clone();
+                                            fechaLimite.add(Calendar.HOUR_OF_DAY, 1);
+                                            if (toma.getPosposiciones() > 0) {
+                                                fechaLimite.add(Calendar.MINUTE, toma.getPosposiciones() * 10);
+                                            }
+                                            esValida = ahora.before(fechaLimite);
+                                            
+                                            // Si pasó más de 1 hora, marcar como omitida y registrar en Firebase
+                                            if (!esValida && toma.getEstado() != TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+                                                toma.setEstado(TomaProgramada.EstadoTomaProgramada.OMITIDA);
+                                                toma.setFechaHoraOmitida(ahora.getTime());
+                                                registrarTomaOmitida(med, toma);
+                                            }
+                                        }
+                                        
+                                        if (esValida) {
+                                            tieneTomasValidas = true;
+                                            Log.d(TAG, "Medicamento " + med.getNombre() + " tiene toma válida: " + 
+                                                  String.format("%02d:%02d", fechaToma.get(Calendar.HOUR_OF_DAY), fechaToma.get(Calendar.MINUTE)));
+                                            break;
+                                        }
+                                    }
+                                    if (!tieneTomasValidas) {
+                                        Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: después de 01:01hs sin tomas válidas del día actual");
+                                        continue;
+                                    }
+                                } else {
+                                    // Antes de las 01:01hs, verificar si tiene tomas válidas (futuras o pasadas menos de 1 hora)
+                                    boolean tieneTomasValidas = false;
+                                    for (TomaProgramada toma : tomasMedicamento) {
+                                        Calendar fechaToma = Calendar.getInstance();
+                                        fechaToma.setTime(toma.getFechaHoraProgramada());
+                                        
+                                        // Verificar que la toma sea del día actual
+                                        boolean esDelDiaActual = fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
+                                                               fechaToma.get(Calendar.DAY_OF_YEAR) == ahora.get(Calendar.DAY_OF_YEAR);
+                                        
+                                        if (!esDelDiaActual || toma.isTomada() || 
+                                            toma.getEstado() == TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+                                            continue;
+                                        }
+                                        
+                                        // Verificar si es futura o pasada menos de 1 hora
+                                        boolean esFutura = fechaToma.after(ahora);
+                                        boolean esValida = esFutura;
+                                        
+                                        if (!esFutura) {
+                                            // Es pasada, verificar límite de 1 hora
+                                            Calendar fechaLimite = (Calendar) fechaToma.clone();
+                                            fechaLimite.add(Calendar.HOUR_OF_DAY, 1);
+                                            if (toma.getPosposiciones() > 0) {
+                                                fechaLimite.add(Calendar.MINUTE, toma.getPosposiciones() * 10);
+                                            }
+                                            esValida = ahora.before(fechaLimite);
+                                            
+                                            // Si pasó más de 1 hora, marcar como omitida y registrar en Firebase
+                                            if (!esValida && toma.getEstado() != TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+                                                toma.setEstado(TomaProgramada.EstadoTomaProgramada.OMITIDA);
+                                                toma.setFechaHoraOmitida(ahora.getTime());
+                                                registrarTomaOmitida(med, toma);
+                                            }
+                                        }
+                                        
+                                        if (esValida) {
+                                            tieneTomasValidas = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!tieneTomasValidas) {
+                                        Log.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no tiene tomas válidas del día actual");
+                                        continue;
+                                    }
+                                }
+                        
+                        // Si llegó aquí, mostrar en dashboard
+                        Log.d(TAG, "Medicamento " + med.getNombre() + " agregado al dashboard");
+                        medicamentosParaDashboard.add(med);
                     }
+                    
+                    Log.d(TAG, "Filtrado completado: " + medicamentosParaDashboard.size() + " medicamentos para mostrar en dashboard");
                     
                     // Verificar que el adapter esté inicializado
                     // Solo actualizar si el listener no ha actualizado ya (evitar sobrescribir datos más recientes)
@@ -282,23 +525,92 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
                                 tomaTrackingService.inicializarTomasDia(med);
                             }
                             
+                            // Marcar tomas omitidas después de las 01:01hs
+                            tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
+                            
                             // Filtrar medicamentos: solo mostrar en dashboard los que tienen
-                            // tomas diarias > 0 y horario configurado (medicamentos regulares)
+                            // tomas diarias > 0, horario configurado y tomas pendientes
                             // Lógica consistente con React: DashboardScreen.jsx líneas 19-23
                             List<Medicamento> medicamentosParaDashboard = new ArrayList<>();
+                            Calendar ahora = Calendar.getInstance();
+                            int horaActual = ahora.get(Calendar.HOUR_OF_DAY);
+                            int minutoActual = ahora.get(Calendar.MINUTE);
+                            
                             for (Medicamento med : medicamentosActivos) {
-                                // Mostrar solo si:
-                                // 1. activo !== false (ya filtrado arriba)
-                                // 2. tomasDiarias > 0
-                                // 3. primeraToma está definida (no null, no vacío, no "00:00")
-                                if (med.getTomasDiarias() > 0 && 
-                                    med.getHorarioPrimeraToma() != null && 
-                                    !med.getHorarioPrimeraToma().isEmpty() &&
-                                    !med.getHorarioPrimeraToma().equals("00:00")) {
-                                    medicamentosParaDashboard.add(med);
+                                // Verificar condiciones básicas
+                                if (med.getTomasDiarias() <= 0 || 
+                                    med.getHorarioPrimeraToma() == null || 
+                                    med.getHorarioPrimeraToma().isEmpty() ||
+                                    med.getHorarioPrimeraToma().equals("00:00")) {
+                                    continue; // No cumple condiciones básicas
                                 }
-                                // Los medicamentos ocasionales (tomasDiarias = 0) no aparecen aquí,
-                                // solo en el botiquín
+                                
+                                // Obtener tomas del medicamento
+                                List<TomaProgramada> tomasMedicamento = tomaTrackingService.obtenerTomasMedicamento(med.getId());
+                                
+                                // Si no hay tomas inicializadas, el medicamento es nuevo o no se inicializó correctamente
+                                // En este caso, mostrarlo si tiene horario válido (medicamento recién creado)
+                                if (tomasMedicamento == null || tomasMedicamento.isEmpty()) {
+                                    medicamentosParaDashboard.add(med);
+                                    continue;
+                                }
+                                
+                                // Verificar si completó todas las tomas del día
+                                if (tomaTrackingService.completoTodasLasTomasDelDia(med.getId())) {
+                                    continue; // Ya completó todas las tomas, ocultar del dashboard
+                                }
+                                
+                                // Verificar si tiene tomas posponibles (después de las 00:00hs hasta las 01:00hs)
+                                // Si es después de las 00:00hs y antes de las 01:01hs, solo mostrar si tiene tomas posponibles
+                                if ((horaActual == 0 && minutoActual >= 1) || (horaActual == 1 && minutoActual == 0)) {
+                                    // Solo mostrar si tiene tomas de las 00:00hs que pueden posponerse
+                                    if (!tomaTrackingService.tieneTomasPosponibles(med.getId())) {
+                                        continue; // No tiene tomas posponibles, ocultar
+                                    }
+                                } else if (horaActual >= 1 && minutoActual >= 1) {
+                                    // Después de las 01:01hs, verificar si tiene tomas pendientes (futuras) del día actual
+                                    boolean tieneTomasFuturas = false;
+                                    for (TomaProgramada toma : tomasMedicamento) {
+                                        Calendar fechaToma = Calendar.getInstance();
+                                        fechaToma.setTime(toma.getFechaHoraProgramada());
+                                        
+                                        // Verificar que la toma sea del día actual y futura
+                                        boolean esDelDiaActual = fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
+                                                               fechaToma.get(Calendar.DAY_OF_YEAR) == ahora.get(Calendar.DAY_OF_YEAR);
+                                        
+                                        if (esDelDiaActual && fechaToma.after(ahora) && !toma.isTomada() && 
+                                            toma.getEstado() != TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+                                            tieneTomasFuturas = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!tieneTomasFuturas) {
+                                        continue; // Después de las 01:01hs, solo mostrar si tiene tomas futuras del día actual
+                                    }
+                                } else {
+                                    // Antes de las 01:01hs, verificar si tiene tomas futuras o pendientes
+                                    boolean tieneTomasPendientes = false;
+                                    for (TomaProgramada toma : tomasMedicamento) {
+                                        Calendar fechaToma = Calendar.getInstance();
+                                        fechaToma.setTime(toma.getFechaHoraProgramada());
+                                        
+                                        // Verificar que la toma sea del día actual
+                                        boolean esDelDiaActual = fechaToma.get(Calendar.YEAR) == ahora.get(Calendar.YEAR) &&
+                                                               fechaToma.get(Calendar.DAY_OF_YEAR) == ahora.get(Calendar.DAY_OF_YEAR);
+                                        
+                                        if (esDelDiaActual && !toma.isTomada() && 
+                                            toma.getEstado() != TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+                                            tieneTomasPendientes = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!tieneTomasPendientes) {
+                                        continue;
+                                    }
+                                }
+                                
+                                // Si llegó aquí, mostrar en dashboard
+                                medicamentosParaDashboard.add(med);
                             }
                             
                             medicamentos = medicamentosParaDashboard;
@@ -469,6 +781,15 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             });
         }
 
+        // Botón Historial
+        if (btnNavHistorial != null) {
+            btnNavHistorial.setOnClickListener(v -> {
+                Intent intent = new Intent(MainActivity.this, HistorialActivity.class);
+                startActivity(intent);
+                finish();
+            });
+        }
+
         // Botón Ajustes
         if (btnNavAjustes != null) {
             btnNavAjustes.setOnClickListener(v -> {
@@ -496,6 +817,48 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             return;
         }
 
+        // Obtener la toma programada más próxima válida
+        TomaProgramada tomaProxima = tomaTrackingService.obtenerTomaProximaValida(medicamento.getId());
+        
+        if (tomaProxima == null) {
+            // Intentar obtener cualquier toma programada para validar
+            List<TomaProgramada> tomas = tomaTrackingService.obtenerTomasMedicamento(medicamento.getId());
+            if (tomas == null || tomas.isEmpty()) {
+                Toast.makeText(this, "No hay tomas programadas para este medicamento", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Buscar la primera toma no tomada para validar
+            TomaProgramada primeraToma = null;
+            for (TomaProgramada toma : tomas) {
+                if (!toma.isTomada()) {
+                    primeraToma = toma;
+                    break;
+                }
+            }
+            
+            if (primeraToma == null) {
+                Toast.makeText(this, "Todas las tomas de este medicamento ya fueron marcadas", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Validar si se puede marcar
+            String error = tomaTrackingService.validarPuedeMarcarToma(medicamento.getId(), primeraToma.getHorario());
+            if (error != null) {
+                Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            tomaProxima = primeraToma;
+        }
+        
+        // Validar una vez más antes de proceder
+        String error = tomaTrackingService.validarPuedeMarcarToma(medicamento.getId(), tomaProxima.getHorario());
+        if (error != null) {
+            Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+            return;
+        }
+
         final int stockAnterior = medicamento.getStockActual();
         final int diasRestantesAnteriores = medicamento.getDiasRestantesDuracion();
         final boolean estabaPausado = medicamento.isPausado();
@@ -506,14 +869,14 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             medicamento.pausarMedicamento();
         }
 
-        // Obtener el horario de la toma más próxima para marcarla como tomada
-        String horarioToma = obtenerHorarioTomaProxima(medicamento);
+        // Usar la fecha y hora programada de la toma programada
+        Date fechaHoraProgramada = tomaProxima.getFechaHoraProgramada();
+        Date ahora = new Date();
         
         Toma toma = new Toma();
         toma.setMedicamentoId(medicamento.getId());
         toma.setMedicamentoNombre(medicamento.getNombre());
-        Date ahora = new Date();
-        toma.setFechaHoraProgramada(ahora);
+        toma.setFechaHoraProgramada(fechaHoraProgramada != null ? fechaHoraProgramada : ahora);
         toma.setFechaHoraTomada(ahora);
         toma.setEstado(Toma.EstadoToma.TOMADA);
         toma.setObservaciones("Registrada desde el panel principal");
@@ -522,19 +885,32 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             @Override
             public void onSuccess(Object result) {
                 // Marcar la toma como tomada en el tracking service
-                if (horarioToma != null) {
-                    tomaTrackingService.marcarTomaComoTomada(medicamento.getId(), horarioToma);
+                if (tomaProxima != null && tomaProxima.getHorario() != null) {
+                    tomaTrackingService.marcarTomaComoTomada(medicamento.getId(), tomaProxima.getHorario());
                 }
                 
                 firebaseService.actualizarMedicamento(medicamento, new FirebaseService.FirestoreCallback() {
                     @Override
                     public void onSuccess(Object updateResult) {
-                        // Reordenar medicamentos después de marcar como tomada
-                        ordenarMedicamentosPorHorario();
-                        adapter.notifyDataSetChanged();
-                        Toast.makeText(MainActivity.this,
-                                "✓ " + medicamento.getNombre() + " marcado como tomado",
-                                Toast.LENGTH_SHORT).show();
+                        // Verificar si el medicamento completó todas sus tomas del día
+                        boolean completoTodasLasTomas = tomaTrackingService.completoTodasLasTomasDelDia(medicamento.getId());
+                        
+                        // Si completó todas las tomas, remover del dashboard
+                        if (completoTodasLasTomas) {
+                            medicamentos.remove(medicamento);
+                            adapter.actualizarMedicamentos(medicamentos);
+                            Toast.makeText(MainActivity.this,
+                                    "✓ " + medicamento.getNombre() + " marcado como tomado. Completaste todas las tomas del día.",
+                                    Toast.LENGTH_LONG).show();
+                        } else {
+                            // Reordenar medicamentos después de marcar como tomada
+                            ordenarMedicamentosPorHorario();
+                            adapter.notifyDataSetChanged();
+                            Toast.makeText(MainActivity.this,
+                                    "✓ " + medicamento.getNombre() + " marcado como tomado",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                        
                         if (tratamientoCompletado) {
                             Toast.makeText(MainActivity.this,
                                     "¡Tratamiento de " + medicamento.getNombre() + " completado!",
@@ -703,6 +1079,39 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         Intent serviceIntent = new Intent(this, TomaStateCheckerService.class);
         startService(serviceIntent);
         Log.d(TAG, "Servicio de verificación de tomas iniciado");
+    }
+    
+    /**
+     * Registra una toma omitida en Firebase con estado PERDIDA
+     */
+    private void registrarTomaOmitida(Medicamento medicamento, TomaProgramada tomaProgramada) {
+        if (medicamento == null || tomaProgramada == null || tomaProgramada.getFechaHoraProgramada() == null) {
+            return;
+        }
+        
+        // Verificar si ya se registró esta toma omitida para evitar duplicados
+        // (esto se puede mejorar con un sistema de cache o verificación en Firebase)
+        
+        Toma toma = new Toma();
+        toma.setMedicamentoId(medicamento.getId());
+        toma.setMedicamentoNombre(medicamento.getNombre());
+        toma.setFechaHoraProgramada(tomaProgramada.getFechaHoraProgramada());
+        toma.setFechaHoraTomada(tomaProgramada.getFechaHoraOmitida() != null ? 
+                                tomaProgramada.getFechaHoraOmitida() : new Date());
+        toma.setEstado(Toma.EstadoToma.PERDIDA);
+        toma.setObservaciones("Toma omitida automáticamente: pasó más de 1 hora desde la hora programada");
+        
+        firebaseService.guardarToma(toma, new FirebaseService.FirestoreCallback() {
+            @Override
+            public void onSuccess(Object result) {
+                Log.d(TAG, "Toma omitida registrada en Firebase para " + medicamento.getNombre());
+            }
+            
+            @Override
+            public void onError(Exception exception) {
+                Log.e(TAG, "Error al registrar toma omitida en Firebase", exception);
+            }
+        });
     }
     
     /**

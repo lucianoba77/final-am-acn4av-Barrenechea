@@ -1,0 +1,98 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función helper para verificar si es asistente
+    function esAsistente() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'asistente';
+    }
+    
+    // Función helper para obtener pacienteId del asistente
+    function pacienteIdDelAsistente() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.pacienteId;
+    }
+    
+    // Reglas para usuarios
+    match /usuarios/{userId} {
+      // Los usuarios pueden leer y escribir su propio documento
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Los asistentes pueden leer el documento de su paciente
+      allow read: if esAsistente() && pacienteIdDelAsistente() == userId;
+    }
+    
+    // Reglas para medicamentos
+    match /medicamentos/{medicamentoId} {
+      // Los pacientes pueden crear medicamentos para sí mismos
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Los pacientes pueden leer sus propios medicamentos
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Los pacientes pueden actualizar y eliminar sus propios medicamentos
+      allow update, delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Los asistentes pueden leer los medicamentos de su paciente
+      // IMPORTANTE: Esta regla permite que los asistentes lean medicamentos
+      // donde el userId del medicamento coincide con su pacienteId
+      allow read: if esAsistente() && 
+        pacienteIdDelAsistente() == resource.data.userId;
+    }
+    
+    // Reglas para asistentes
+    match /asistentes/{asistenteId} {
+      // IMPORTANTE: Permitir que cualquier usuario autenticado pueda leer para verificar si es asistente
+      // Esto es necesario para la función esAsistenteDe
+      allow read: if request.auth != null;
+      
+      // Los pacientes pueden leer sus propios asistentes
+      allow read: if request.auth != null && 
+        resource.data.pacienteId == request.auth.uid;
+      
+      // Los pacientes pueden crear asistentes para sí mismos
+      allow create: if request.auth != null && 
+        request.resource.data.pacienteId == request.auth.uid;
+      
+      // Los pacientes pueden eliminar sus propios asistentes
+      allow delete: if request.auth != null && 
+        resource.data.pacienteId == request.auth.uid;
+      
+      // Los asistentes pueden leer su propio documento
+      allow read: if request.auth != null && 
+        request.auth.uid == asistenteId;
+    }
+    
+    // Reglas para tokens de Google Calendar
+    match /googleTokens/{userId} {
+      // Los usuarios solo pueden leer y escribir su propio token
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Reglas para tomas de medicamentos
+    match /tomas/{tomaId} {
+      // Los usuarios pueden crear tomas para sí mismos
+      // IMPORTANTE: Usar request.resource.data para create porque el documento aún no existe
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Los usuarios pueden leer sus propias tomas
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Los usuarios pueden actualizar y eliminar sus propias tomas
+      allow update, delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Los asistentes pueden leer las tomas de su paciente
+      allow read: if esAsistente() && 
+        pacienteIdDelAsistente() == resource.data.userId;
+    }
+  }
+}
+

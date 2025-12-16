@@ -56,6 +56,22 @@
         android:drawablePadding="@dimen/padding_small"
         style="@style/NavigationButton" />
 
+    <!-- Botón Historial -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnNavHistorial"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/button_height_large"
+        android:layout_weight="1"
+        android:layout_marginStart="@dimen/margin_small"
+        android:layout_marginEnd="@dimen/margin_small"
+        android:text="@string/nav_history"
+        android:textSize="@dimen/text_size_small"
+        android:textColor="@color/nav_history"
+        android:backgroundTint="@android:color/transparent"
+        android:drawableTop="@drawable/ic_history"
+        android:drawablePadding="@dimen/padding_small"
+        style="@style/NavigationButton" />
+
     <!-- Botón Ajustes/Configuración -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnNavAjustes"

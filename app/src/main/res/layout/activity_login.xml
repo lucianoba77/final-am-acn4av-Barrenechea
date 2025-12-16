@@ -10,14 +10,24 @@
 
     <!-- Logo o título -->
     <ImageView
-        android:layout_width="160dp"
-        android:layout_height="160dp"
+        android:layout_width="180dp"
+        android:layout_height="180dp"
         android:layout_marginTop="@dimen/margin_xlarge"
-        android:layout_marginBottom="@dimen/margin_medium"
-        android:src="@mipmap/mis_medicinas"
+        android:layout_marginBottom="@dimen/margin_small"
+        android:src="@drawable/logo_mimedicina"
         android:contentDescription="@string/app_name"
-        android:scaleType="centerInside"
-        android:adjustViewBounds="true" />
+        android:scaleType="fitCenter" />
+
+    <!-- Nombre de la app -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mi Medicina APP"
+        android:textSize="24sp"
+        android:textColor="@color/success_dark"
+        android:textStyle="bold"
+        android:layout_marginBottom="@dimen/margin_medium"
+        android:fontFamily="sans-serif-medium" />
 
     <!-- Título -->
     <TextView
@@ -168,6 +178,11 @@
                 android:backgroundTint="@color/white"
                 app:strokeColor="@android:color/darker_gray"
                 app:strokeWidth="1dp"
+                app:icon="@drawable/ic_google"
+                app:iconGravity="start"
+                app:iconPadding="0dp"
+                app:iconSize="24dp"
+                app:iconTint="@null"
                 android:layout_marginBottom="@dimen/margin_medium"
                 style="@style/MedicineButton" />
 

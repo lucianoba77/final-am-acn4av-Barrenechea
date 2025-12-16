@@ -23,6 +23,9 @@
 
         <!-- Barra de estado - Compatible con API 21+ -->
         <item name="android:statusBarColor">@color/primary_dark</item>
+        <!-- Asegurar que la barra de estado sea visible -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowTranslucentStatus">false</item>
         <!-- Solo para API 23+ -->
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
 

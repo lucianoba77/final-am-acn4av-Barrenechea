@@ -375,17 +375,6 @@ app/src/main/java/com/controlmedicamentos/myapplication/
 - **Conexión a Internet**: Requerida para autenticación y sincronización
 - **Google Play Services**: Requerido para Google Sign-In y Google Calendar
 
-## Configuración
-
-1. Descargar el archivo `google-services.json` desde Firebase Console
-2. Colocarlo en `app/google-services.json`
-3. Configurar las reglas de Firestore según `INSTRUCCIONES_FIREBASE.md`
-4. Habilitar Authentication en Firebase Console
-5. Configurar OAuth 2.0 en Google Cloud Console para Google Calendar
-6. Agregar usuarios de prueba en Google Cloud Console (OAuth consent screen > Test users)
-7. Configurar el Web Client ID en `app/src/main/res/values/strings.xml` (ya incluido en `google-services.json`)
-
-**Nota**: Durante el desarrollo, asegúrate de tener usuarios de prueba configurados en Google Cloud Console para poder usar Google Calendar sin problemas.
 
 ## Notas de Desarrollo
 

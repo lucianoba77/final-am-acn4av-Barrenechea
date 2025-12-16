@@ -483,6 +483,7 @@ public class FirebaseService {
             return;
         }
 
+        // Intentar obtener con orderBy primero, si falla, obtener sin orderBy
         db.collection(COLLECTION_TOMAS)
             .whereEqualTo("userId", firebaseUser.getUid())
             .orderBy("fechaHoraTomada", Query.Direction.DESCENDING)
@@ -491,16 +492,46 @@ public class FirebaseService {
                 if (task.isSuccessful()) {
                     List<Toma> tomas = new ArrayList<>();
                     for (DocumentSnapshot document : task.getResult()) {
-                        tomas.add(mapToToma(document));
+                        Toma toma = mapToToma(document);
+                        if (toma != null) {
+                            tomas.add(toma);
+                        }
                     }
                     if (callback != null) {
                         callback.onSuccess(tomas);
                     }
                 } else {
-                    Log.e(TAG, "Error al obtener tomas del usuario", task.getException());
-                    if (callback != null) {
-                        callback.onError(task.getException());
-                    }
+                    // Si falla por falta de índice, intentar sin orderBy
+                    Log.w(TAG, "Error al obtener tomas con orderBy, intentando sin orden", task.getException());
+                    db.collection(COLLECTION_TOMAS)
+                        .whereEqualTo("userId", firebaseUser.getUid())
+                        .get()
+                        .addOnCompleteListener(task2 -> {
+                            if (task2.isSuccessful()) {
+                                List<Toma> tomas = new ArrayList<>();
+                                for (DocumentSnapshot document : task2.getResult()) {
+                                    Toma toma = mapToToma(document);
+                                    if (toma != null) {
+                                        tomas.add(toma);
+                                    }
+                                }
+                                // Ordenar manualmente por fecha
+                                tomas.sort((t1, t2) -> {
+                                    if (t1.getFechaHoraTomada() == null || t2.getFechaHoraTomada() == null) {
+                                        return 0;
+                                    }
+                                    return t2.getFechaHoraTomada().compareTo(t1.getFechaHoraTomada());
+                                });
+                                if (callback != null) {
+                                    callback.onSuccess(tomas);
+                                }
+                            } else {
+                                Log.e(TAG, "Error al obtener tomas del usuario", task2.getException());
+                                if (callback != null) {
+                                    callback.onError(task2.getException());
+                                }
+                            }
+                        });
                 }
             });
     }

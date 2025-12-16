@@ -37,6 +37,7 @@
 
     <!-- Colores de estado -->
     <color name="success">#4CAF50</color>
+    <color name="success_dark">#2E7D32</color>
     <color name="warning">#FF9800</color>
     <color name="error">#F44336</color>
     <color name="info">#2196F3</color>
@@ -57,6 +58,7 @@
     <color name="nav_home">#6C757D</color>
     <color name="nav_add">#6C757D</color>
     <color name="nav_cabinet">#6C757D</color>
+    <color name="nav_history">#6C757D</color>
     <color name="nav_settings">#6C757D</color>
     <color name="nav_active">#2196F3</color>
 

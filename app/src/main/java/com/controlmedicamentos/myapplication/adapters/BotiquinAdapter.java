@@ -159,6 +159,19 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
 
             // Configurar color de fondo
             cardMedicamento.setCardBackgroundColor(medicamento.getColor());
+            
+            // Mejorar contraste de texto según el color de fondo
+            // Usar texto más oscuro para mejor legibilidad
+            int textColorDark = context.getColor(android.R.color.black);
+            int textColorMedium = 0xFF2C2C2C; // Color oscuro para mejor contraste
+            
+            // Aplicar colores mejorados a los TextViews
+            tvNombre.setTextColor(textColorDark);
+            tvPresentacion.setTextColor(textColorMedium);
+            tvStock.setTextColor(textColorMedium);
+            tvFechaVencimiento.setTextColor(textColorMedium);
+            
+            // El estado ya tiene su color específico (verde para Activo, rojo para Vencido, etc.)
 
             // Configurar listeners
             btnTomeUna.setOnClickListener(v -> {

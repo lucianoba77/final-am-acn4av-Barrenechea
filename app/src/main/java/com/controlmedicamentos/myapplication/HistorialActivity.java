@@ -8,6 +8,10 @@ import android.widget.AutoCompleteTextView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.controlmedicamentos.myapplication.adapters.HistorialAdapter;
@@ -37,16 +41,25 @@ public class HistorialActivity extends AppCompatActivity {
 
     private BarChart chartAdherencia;
     private RecyclerView rvTratamientosConcluidos;
+    private RecyclerView rvMedicamentosOcasionales;
     private TextView tvEstadisticasGenerales;
+    private TextView tvEmptyOcasionales;
     private MaterialButton btnVolver;
     // Botones de navegación
-    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavAjustes;
+    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     private HistorialAdapter adapter;
+    private HistorialAdapter adapterOcasionales;
     private List<Medicamento> tratamientosConcluidos = new ArrayList<>();
+    private List<Medicamento> medicamentosOcasionales = new ArrayList<>();
     private List<Medicamento> todosLosMedicamentos = new ArrayList<>();
     private List<Toma> tomasUsuario = new ArrayList<>();
     private AuthService authService;
     private FirebaseService firebaseService;
+
+    // Historial completo de adherencia del paciente
+    private TextView tvResumenAdherenciaGeneral;
+    private BarChart chartAdherenciaGeneralSemanal;
+    private BarChart chartAdherenciaGeneralMensual;
 
     // Plan de adherencia
     private TextInputLayout tilMedicamentosAdherencia;
@@ -57,6 +70,7 @@ public class HistorialActivity extends AppCompatActivity {
     private BarChart chartAdherenciaSemanal;
     private BarChart chartAdherenciaMensual;
     private View cardPlanAdherencia;
+    private View cardMedicamentosOcasionales;
     private List<Medicamento> medicamentosPlan = new ArrayList<>();
     private ArrayAdapter<String> planAdapter;
 
@@ -64,12 +78,22 @@ public class HistorialActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // Configurar barra de estado para que sea visible
+        configurarBarraEstado();
+        
         // Ocultar ActionBar
         if (getSupportActionBar() != null) {
             getSupportActionBar().hide();
         }
         
         setContentView(R.layout.activity_historial);
+        
+        // Aplicar window insets al header para respetar la barra de estado
+        // Usar post para asegurar que se ejecute después del layout
+        View headerLayout = findViewById(R.id.headerLayout);
+        if (headerLayout != null) {
+            headerLayout.post(() -> aplicarWindowInsets(headerLayout));
+        }
 
         // Inicializar servicios
         authService = new AuthService();
@@ -92,14 +116,22 @@ public class HistorialActivity extends AppCompatActivity {
     private void inicializarVistas() {
         chartAdherencia = findViewById(R.id.chartAdherencia);
         rvTratamientosConcluidos = findViewById(R.id.rvTratamientosConcluidos);
+        rvMedicamentosOcasionales = findViewById(R.id.rvMedicamentosOcasionales);
         tvEstadisticasGenerales = findViewById(R.id.tvEstadisticasGenerales);
+        tvEmptyOcasionales = findViewById(R.id.tvEmptyOcasionales);
         btnVolver = findViewById(R.id.btnVolver);
         
         // Botones de navegación
         btnNavHome = findViewById(R.id.btnNavHome);
         btnNavNuevaMedicina = findViewById(R.id.btnNavNuevaMedicina);
         btnNavBotiquin = findViewById(R.id.btnNavBotiquin);
+        btnNavHistorial = findViewById(R.id.btnNavHistorial);
         btnNavAjustes = findViewById(R.id.btnNavAjustes);
+
+        // Historial completo de adherencia
+        tvResumenAdherenciaGeneral = findViewById(R.id.tvResumenAdherenciaGeneral);
+        chartAdherenciaGeneralSemanal = findViewById(R.id.chartAdherenciaGeneralSemanal);
+        chartAdherenciaGeneralMensual = findViewById(R.id.chartAdherenciaGeneralMensual);
 
         tilMedicamentosAdherencia = findViewById(R.id.tilMedicamentosAdherencia);
         actvMedicamentosAdherencia = findViewById(R.id.actvMedicamentosAdherencia);
@@ -109,12 +141,15 @@ public class HistorialActivity extends AppCompatActivity {
         chartAdherenciaSemanal = findViewById(R.id.chartAdherenciaSemanal);
         chartAdherenciaMensual = findViewById(R.id.chartAdherenciaMensual);
         cardPlanAdherencia = findViewById(R.id.cardPlanAdherencia);
+        cardMedicamentosOcasionales = findViewById(R.id.cardMedicamentosOcasionales);
     }
 
     private void configurarGraficos() {
         configurarBarChart(chartAdherencia);
         configurarBarChart(chartAdherenciaSemanal);
         configurarBarChart(chartAdherenciaMensual);
+        configurarBarChart(chartAdherenciaGeneralSemanal);
+        configurarBarChart(chartAdherenciaGeneralMensual);
     }
 
     private void configurarBarChart(BarChart chart) {
@@ -143,6 +178,10 @@ public class HistorialActivity extends AppCompatActivity {
         adapter = new HistorialAdapter(this, tratamientosConcluidos);
         rvTratamientosConcluidos.setLayoutManager(new LinearLayoutManager(this));
         rvTratamientosConcluidos.setAdapter(adapter);
+        
+        adapterOcasionales = new HistorialAdapter(this, medicamentosOcasionales);
+        rvMedicamentosOcasionales.setLayoutManager(new LinearLayoutManager(this));
+        rvMedicamentosOcasionales.setAdapter(adapterOcasionales);
     }
 
     private void cargarDatos() {
@@ -174,19 +213,30 @@ public class HistorialActivity extends AppCompatActivity {
             @Override
             public void onSuccess(List<?> result) {
                 tomasUsuario = result != null ? (List<Toma>) result : new ArrayList<>();
+                // Procesar información incluso si no hay tomas
                 procesarInformacion();
             }
 
             @Override
             public void onError(Exception exception) {
-                tvEstadisticasGenerales.setText("Error al obtener tomas del usuario");
+                android.util.Log.e("HistorialActivity", "Error al obtener tomas del usuario", exception);
+                // Continuar procesando con lista vacía de tomas
+                tomasUsuario = new ArrayList<>();
+                procesarInformacion();
+                // Mostrar mensaje informativo en lugar de error
+                if (todosLosMedicamentos.isEmpty()) {
+                    tvEstadisticasGenerales.setText("No hay medicamentos registrados");
+                } else {
+                    tvEstadisticasGenerales.setText("No se pudieron cargar las tomas. Mostrando medicamentos disponibles.");
+                }
             }
         });
     }
 
     private void procesarInformacion() {
         if (todosLosMedicamentos.isEmpty()) {
-            tvEstadisticasGenerales.setText(getString(R.string.loading_statistics));
+            tvEstadisticasGenerales.setText("No hay medicamentos registrados");
+            adapter.actualizarMedicamentos(new ArrayList<>());
             return;
         }
 
@@ -213,25 +263,59 @@ public class HistorialActivity extends AppCompatActivity {
 
         List<AdherenciaResumen> resumenes = new ArrayList<>();
         tratamientosConcluidos = new ArrayList<>();
+        medicamentosOcasionales = new ArrayList<>();
 
         for (Medicamento medicamento : todosLosMedicamentos) {
             List<Toma> tomasMedicamento = AdherenciaCalculator.filtrarTomasPorMedicamento(
                 tomasUsuario,
                 medicamento.getId());
             boolean esOcasional = medicamento.getTomasDiarias() == 0;
-            if (esOcasional && tomasMedicamento.isEmpty()) {
-                continue; // Ocasionales solo aparecen si tuvieron tomas
+            
+            // Separar medicamentos ocasionales con tomas
+            if (esOcasional) {
+                if (!tomasMedicamento.isEmpty()) {
+                    // Medicamento ocasional que fue consumido - agregar a lista separada
+                    medicamentosOcasionales.add(medicamento);
+                }
+                // No incluir en adherencia ni en tratamientos concluidos
+                continue;
             }
 
+            // Calcular resumen incluso si no hay tomas (mostrará 0% de adherencia)
             resumenes.add(AdherenciaCalculator.calcularResumenGeneral(medicamento, tomasMedicamento));
 
-            if (medicamento.isPausado()) {
+            // Incluir medicamentos pausados o finalizados en tratamientos concluidos
+            if (medicamento.isPausado() || !medicamento.isActivo()) {
                 tratamientosConcluidos.add(medicamento);
+            }
+        }
+        
+        // Si no hay tratamientos concluidos pero hay medicamentos activos, mostrar todos (excepto ocasionales)
+        if (tratamientosConcluidos.isEmpty() && !todosLosMedicamentos.isEmpty()) {
+            for (Medicamento medicamento : todosLosMedicamentos) {
+                if (medicamento.getTomasDiarias() > 0) {
+                    tratamientosConcluidos.add(medicamento);
+                }
             }
         }
 
         adapter.actualizarMedicamentos(tratamientosConcluidos);
+        adapterOcasionales.actualizarMedicamentos(medicamentosOcasionales);
+        
+        // Mostrar/ocultar card de medicamentos ocasionales
+        if (cardMedicamentosOcasionales != null) {
+            cardMedicamentosOcasionales.setVisibility(
+                medicamentosOcasionales.isEmpty() ? View.GONE : View.VISIBLE);
+        }
+        
+        // Mostrar/ocultar mensaje vacío para ocasionales
+        if (tvEmptyOcasionales != null) {
+            tvEmptyOcasionales.setVisibility(
+                medicamentosOcasionales.isEmpty() ? View.VISIBLE : View.GONE);
+        }
+        
         cargarGraficoAdherencia(resumenes);
+        cargarHistorialCompletoAdherencia();
         configurarPlanAdherencia();
     }
 
@@ -261,6 +345,52 @@ public class HistorialActivity extends AppCompatActivity {
         chartAdherencia.setData(barData);
         chartAdherencia.getXAxis().setValueFormatter(new IndexAxisValueFormatter(labels));
         chartAdherencia.invalidate();
+    }
+
+    /**
+     * Carga y muestra el historial completo de adherencia del paciente
+     */
+    private void cargarHistorialCompletoAdherencia() {
+        if (todosLosMedicamentos.isEmpty()) {
+            tvResumenAdherenciaGeneral.setText("No hay medicamentos registrados");
+            return;
+        }
+        
+        // Mostrar datos incluso si no hay tomas (mostrará 0% de adherencia)
+        if (tomasUsuario.isEmpty()) {
+            tvResumenAdherenciaGeneral.setText("No hay tomas registradas. Adherencia: 0%");
+            // Limpiar gráficos
+            if (chartAdherenciaGeneralSemanal != null) {
+                chartAdherenciaGeneralSemanal.clear();
+                chartAdherenciaGeneralSemanal.invalidate();
+            }
+            if (chartAdherenciaGeneralMensual != null) {
+                chartAdherenciaGeneralMensual.clear();
+                chartAdherenciaGeneralMensual.invalidate();
+            }
+            return;
+        }
+
+        // Calcular adherencia general del paciente
+        AdherenciaResumen resumenGeneral = AdherenciaCalculator.calcularAdherenciaGeneralPaciente(
+            todosLosMedicamentos, tomasUsuario);
+
+        int porcentaje = Math.round(resumenGeneral.getPorcentaje());
+        tvResumenAdherenciaGeneral.setText(getString(
+            R.string.patient_adherence_summary,
+            porcentaje,
+            resumenGeneral.getTomasRealizadas(),
+            resumenGeneral.getTomasEsperadas()
+        ));
+
+        // Calcular y mostrar gráficos de adherencia general
+        List<AdherenciaIntervalo> datosSemanales = AdherenciaCalculator.calcularAdherenciaGeneralSemanal(
+            todosLosMedicamentos, tomasUsuario);
+        List<AdherenciaIntervalo> datosMensuales = AdherenciaCalculator.calcularAdherenciaGeneralMensual(
+            todosLosMedicamentos, tomasUsuario);
+
+        actualizarChartIntervalos(chartAdherenciaGeneralSemanal, datosSemanales);
+        actualizarChartIntervalos(chartAdherenciaGeneralMensual, datosMensuales);
     }
 
     private void configurarPlanAdherencia() {
@@ -396,6 +526,12 @@ public class HistorialActivity extends AppCompatActivity {
             });
         }
         
+        if (btnNavHistorial != null) {
+            btnNavHistorial.setOnClickListener(v -> {
+                // Ya estamos en historial, no hacer nada
+            });
+        }
+        
         if (btnNavAjustes != null) {
             btnNavAjustes.setOnClickListener(v -> {
                 Intent intent = new Intent(HistorialActivity.this, AjustesActivity.class);
@@ -403,6 +539,81 @@ public class HistorialActivity extends AppCompatActivity {
                 finish();
             });
         }
+    }
+
+    /**
+     * Configura la barra de estado para que sea visible
+     */
+    private void configurarBarraEstado() {
+        android.view.Window window = getWindow();
+        
+        // Asegurar que la barra de estado sea visible
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // Limpiar cualquier flag que pueda ocultar la barra de estado
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            
+            // Habilitar dibujo de la barra de estado
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            
+            // Establecer color de la barra de estado
+            window.setStatusBarColor(getResources().getColor(R.color.primary_dark));
+        }
+        
+        // Configurar apariencia de la barra de estado
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // API 30+
+            WindowInsetsControllerCompat controller = 
+                WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller != null) {
+                controller.setAppearanceLightStatusBars(false);
+                // Asegurar que la barra de estado sea visible
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
+            }
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            // API 23-29
+            int flags = window.getDecorView().getSystemUiVisibility();
+            // Limpiar flags que oculten la barra de estado
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            window.getDecorView().setSystemUiVisibility(flags);
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // API 21-22
+            int flags = window.getDecorView().getSystemUiVisibility();
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            window.getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+    
+    /**
+     * Aplica window insets al header para respetar la barra de estado
+     */
+    private void aplicarWindowInsets(View headerLayout) {
+        ViewCompat.setOnApplyWindowInsetsListener(headerLayout, 
+            (v, insets) -> {
+                int statusBarHeight = insets.getInsets(
+                    WindowInsetsCompat.Type.statusBars()).top;
+                int paddingHorizontal = getResources().getDimensionPixelSize(R.dimen.padding_medium);
+                int paddingVertical = getResources().getDimensionPixelSize(R.dimen.padding_medium);
+                
+                // Aplicar padding con la altura de la barra de estado
+                v.setPadding(
+                    paddingHorizontal,
+                    statusBarHeight + paddingVertical,
+                    paddingHorizontal,
+                    paddingVertical
+                );
+                
+                // Asegurar que el layout se actualice
+                v.requestLayout();
+                
+                return insets;
+            });
+        
+        // Forzar aplicación inmediata de insets
+        ViewCompat.requestApplyInsets(headerLayout);
     }
 
     @Override

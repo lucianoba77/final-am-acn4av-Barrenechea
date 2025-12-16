@@ -3,8 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background"
-    android:fitsSystemWindows="true">
+    android:background="@color/background">
 
     <!-- Header -->
     <LinearLayout
@@ -12,12 +11,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="@dimen/padding_medium"
-        android:paddingTop="24dp"
+        android:paddingStart="@dimen/padding_medium"
+        android:paddingEnd="@dimen/padding_medium"
+        android:paddingTop="0dp"
+        android:paddingBottom="@dimen/padding_medium"
         android:minHeight="?attr/actionBarSize"
         android:background="@color/primary"
         android:gravity="center_vertical"
-        android:layout_alignParentTop="true">
+        android:layout_alignParentTop="true"
+        >
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnVolver"
@@ -81,13 +83,23 @@
                         android:gravity="center_vertical"
                         android:layout_marginBottom="@dimen/margin_medium">
 
-                        <ImageView
-                            android:id="@+id/ivIconoMedicamento"
-                            android:layout_width="64dp"
-                            android:layout_height="64dp"
+                        <!-- Ícono del medicamento con fondo circular -->
+                        <FrameLayout
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
                             android:layout_marginEnd="@dimen/margin_medium"
-                            android:src="@android:drawable/ic_menu_info_details"
-                            android:contentDescription="@string/medicine_icon" />
+                            android:background="@drawable/ic_medicamento_background"
+                            android:padding="12dp">
+                            
+                            <ImageView
+                                android:id="@+id/ivIconoMedicamento"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:scaleType="fitCenter"
+                                android:src="@android:drawable/ic_menu_info_details"
+                                android:contentDescription="@string/medicine_icon"
+                                android:tint="@color/primary" />
+                        </FrameLayout>
 
                         <LinearLayout
                             android:layout_width="0dp"

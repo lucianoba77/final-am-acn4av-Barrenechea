@@ -10,6 +10,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -33,7 +35,19 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Configurar barra de estado ANTES de setContentView
+        configurarBarraEstado();
+        
         setContentView(R.layout.activity_login);
+        
+        // Asegurar que la barra de estado sea visible después de setContentView
+        getWindow().getDecorView().post(new Runnable() {
+            @Override
+            public void run() {
+                configurarBarraEstado();
+            }
+        });
 
         // Inicializar servicio de autenticación
         authService = new AuthService();
@@ -545,6 +559,61 @@ public class LoginActivity extends AppCompatActivity {
                 Log.e(TAG, "Error al enviar email de recuperación", exception);
             }
         });
+    }
+
+    /**
+     * Configura la barra de estado para que sea visible
+     */
+    private void configurarBarraEstado() {
+        android.view.Window window = getWindow();
+        
+        // Asegurar que la barra de estado sea visible
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // Limpiar TODOS los flags que puedan ocultar la barra de estado
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
+            
+            // Habilitar dibujo de la barra de estado
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            
+            // Establecer color de la barra de estado
+            window.setStatusBarColor(getResources().getColor(R.color.primary_dark));
+        }
+        
+        // Configurar apariencia de la barra de estado
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // API 30+
+            WindowInsetsControllerCompat controller = 
+                WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller != null) {
+                controller.setAppearanceLightStatusBars(false);
+                // Asegurar que la barra de estado sea visible
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars());
+            }
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            // API 23-29
+            int flags = window.getDecorView().getSystemUiVisibility();
+            // Limpiar TODOS los flags que oculten la barra de estado
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_IMMERSIVE;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            window.getDecorView().setSystemUiVisibility(flags);
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // API 21-22
+            int flags = window.getDecorView().getSystemUiVisibility();
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+            flags &= ~android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            window.getDecorView().setSystemUiVisibility(flags);
+        }
     }
 
 }

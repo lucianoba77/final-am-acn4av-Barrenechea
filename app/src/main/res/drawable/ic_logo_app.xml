@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    
+    <!-- Fondo circular -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M100,20 C50,20 10,60 10,110 C10,160 50,200 100,200 C150,200 190,160 190,110 C190,60 150,20 100,20 Z" />
+    
+    <!-- Pastilla principal grande -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M100,50 C75,50 55,70 55,95 C55,120 75,140 100,140 C125,140 145,120 145,95 C145,70 125,50 100,50 Z" />
+    
+    <!-- Línea divisoria en la pastilla -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M100,60 L100,130"
+        android:strokeWidth="4"
+        android:strokeColor="#2196F3" />
+    
+    <!-- Círculos pequeños (pastillas) a los lados -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70,95 m-8,0 a8,8 0 1,1 16,0 a8,8 0 1,1 -16,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M130,95 m-8,0 a8,8 0 1,1 16,0 a8,8 0 1,1 -16,0" />
+    
+    <!-- Línea divisoria en las pastillas pequeñas -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M70,90 L70,100"
+        android:strokeWidth="2"
+        android:strokeColor="#2196F3" />
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M130,90 L130,100"
+        android:strokeWidth="2"
+        android:strokeColor="#2196F3" />
+</vector>
+

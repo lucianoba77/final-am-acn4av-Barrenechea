@@ -207,5 +207,170 @@ public final class AdherenciaCalculator {
         }
         return nombre.substring(0, 1).toUpperCase(LOCALE_ES) + nombre.substring(1).toLowerCase(LOCALE_ES);
     }
+
+    /**
+     * Calcula el resumen general de adherencia del paciente considerando todos sus medicamentos
+     * @param medicamentos Lista de todos los medicamentos del paciente
+     * @param todasLasTomas Lista de todas las tomas del paciente
+     * @return Resumen de adherencia general
+     */
+    public static AdherenciaResumen calcularAdherenciaGeneralPaciente(
+            List<Medicamento> medicamentos, List<Toma> todasLasTomas) {
+        if (medicamentos == null || medicamentos.isEmpty()) {
+            return new AdherenciaResumen("", "General", 0, 0, 0f, false);
+        }
+
+        int totalTomasEsperadas = 0;
+        int totalTomasRealizadas = 0;
+        Date fechaInicioGeneral = null;
+        Date fechaFinGeneral = new Date();
+
+        // Calcular tomas esperadas y realizadas para cada medicamento activo
+        for (Medicamento medicamento : medicamentos) {
+            if (!medicamento.isActivo() || medicamento.isPausado()) {
+                continue;
+            }
+
+            List<Toma> tomasMedicamento = filtrarTomasPorMedicamento(todasLasTomas, medicamento.getId());
+            AdherenciaResumen resumen = calcularResumenGeneral(medicamento, tomasMedicamento);
+            
+            totalTomasEsperadas += resumen.getTomasEsperadas();
+            totalTomasRealizadas += resumen.getTomasRealizadas();
+
+            // Determinar fecha de inicio más antigua
+            if (medicamento.getFechaInicioTratamiento() != null) {
+                if (fechaInicioGeneral == null || 
+                    medicamento.getFechaInicioTratamiento().before(fechaInicioGeneral)) {
+                    fechaInicioGeneral = medicamento.getFechaInicioTratamiento();
+                }
+            }
+        }
+
+        float porcentaje = totalTomasEsperadas == 0 ? 0f : 
+            Math.min(100f, (totalTomasRealizadas * 100f) / (float) totalTomasEsperadas);
+
+        return new AdherenciaResumen("", "Adherencia General", 
+            totalTomasEsperadas, totalTomasRealizadas, porcentaje, false);
+    }
+
+    /**
+     * Calcula la adherencia general del paciente por semana (últimas 4 semanas)
+     * @param medicamentos Lista de todos los medicamentos del paciente
+     * @param todasLasTomas Lista de todas las tomas del paciente
+     * @return Lista de intervalos semanales con adherencia
+     */
+    public static List<AdherenciaIntervalo> calcularAdherenciaGeneralSemanal(
+            List<Medicamento> medicamentos, List<Toma> todasLasTomas) {
+        List<AdherenciaIntervalo> resultado = new ArrayList<>();
+        Date hoy = new Date();
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(truncarFecha(sumarDias(hoy, -27))); // Últimas 4 semanas
+
+        for (int semana = 0; semana < 4; semana++) {
+            Date inicio = cal.getTime();
+            Date fin = finDeDia(sumarDias(inicio, 6));
+
+            int esperadas = 0;
+            int realizadas = 0;
+
+            // Sumar tomas esperadas y realizadas de todos los medicamentos activos
+            for (Medicamento medicamento : medicamentos) {
+                if (!medicamento.isActivo() || medicamento.isPausado()) {
+                    continue;
+                }
+
+                List<Toma> tomasMedicamento = filtrarTomasPorMedicamento(todasLasTomas, medicamento.getId());
+                boolean esOcasional = medicamento.getTomasDiarias() == 0;
+                int diasIntervalo = diasEntre(inicio, fin) + 1;
+                
+                int esperadasMed = esOcasional ? 
+                    Math.max(1, contarTomasEnRango(tomasMedicamento, inicio, fin)) :
+                    medicamento.getTomasDiarias() * diasIntervalo;
+                
+                int realizadasMed = contarTomasEnRango(tomasMedicamento, inicio, fin);
+                
+                esperadas += esperadasMed;
+                realizadas += realizadasMed;
+            }
+
+            float porcentaje = esperadas == 0 ? 0f : 
+                Math.min(100f, (realizadas * 100f) / (float) esperadas);
+
+            resultado.add(new AdherenciaIntervalo(
+                "Sem " + (semana + 1),
+                esperadas,
+                realizadas,
+                porcentaje
+            ));
+            cal.add(Calendar.DAY_OF_YEAR, 7);
+        }
+
+        return resultado;
+    }
+
+    /**
+     * Calcula la adherencia general del paciente por mes (últimos 6 meses)
+     * @param medicamentos Lista de todos los medicamentos del paciente
+     * @param todasLasTomas Lista de todas las tomas del paciente
+     * @return Lista de intervalos mensuales con adherencia
+     */
+    public static List<AdherenciaIntervalo> calcularAdherenciaGeneralMensual(
+            List<Medicamento> medicamentos, List<Toma> todasLasTomas) {
+        List<AdherenciaIntervalo> resultado = new ArrayList<>();
+        Date hoy = new Date();
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(truncarFecha(hoy));
+        cal.add(Calendar.MONTH, -5); // Últimos 6 meses
+        cal.set(Calendar.DAY_OF_MONTH, 1); // Primer día del mes
+
+        for (int mes = 0; mes < 6; mes++) {
+            Date inicio = cal.getTime();
+            cal.add(Calendar.MONTH, 1);
+            cal.add(Calendar.DAY_OF_MONTH, -1);
+            Date fin = finDeDia(cal.getTime());
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+
+            int esperadas = 0;
+            int realizadas = 0;
+
+            // Sumar tomas esperadas y realizadas de todos los medicamentos activos
+            for (Medicamento medicamento : medicamentos) {
+                if (!medicamento.isActivo() || medicamento.isPausado()) {
+                    continue;
+                }
+
+                List<Toma> tomasMedicamento = filtrarTomasPorMedicamento(todasLasTomas, medicamento.getId());
+                boolean esOcasional = medicamento.getTomasDiarias() == 0;
+                int diasIntervalo = diasEntre(inicio, fin) + 1;
+                
+                int esperadasMed = esOcasional ? 
+                    Math.max(1, contarTomasEnRango(tomasMedicamento, inicio, fin)) :
+                    medicamento.getTomasDiarias() * diasIntervalo;
+                
+                int realizadasMed = contarTomasEnRango(tomasMedicamento, inicio, fin);
+                
+                esperadas += esperadasMed;
+                realizadas += realizadasMed;
+            }
+
+            float porcentaje = esperadas == 0 ? 0f : 
+                Math.min(100f, (realizadas * 100f) / (float) esperadas);
+
+            String[] nombresMeses = new DateFormatSymbols(LOCALE_ES).getShortMonths();
+            String nombreMes = nombresMeses[cal.get(Calendar.MONTH)];
+            if (nombreMes == null || nombreMes.isEmpty()) {
+                nombreMes = String.valueOf(cal.get(Calendar.MONTH) + 1);
+            }
+
+            resultado.add(new AdherenciaIntervalo(
+                nombreMes.substring(0, 1).toUpperCase(LOCALE_ES) + nombreMes.substring(1).toLowerCase(LOCALE_ES),
+                esperadas,
+                realizadas,
+                porcentaje
+            ));
+        }
+
+        return resultado;
+    }
 }
 
