@@ -1144,7 +1144,9 @@ public class FirebaseService {
             }
         }
         medicamento.setActivo(document.getBoolean("activo") != null ? document.getBoolean("activo") : true);
-        medicamento.setPausado(document.getBoolean("pausado") != null ? document.getBoolean("pausado") : false);
+        boolean pausado = document.getBoolean("pausado") != null ? document.getBoolean("pausado") : false;
+        medicamento.setPausado(pausado);
+        Logger.d(TAG, "mapToMedicamento: Pausado establecido: " + pausado);
         medicamento.setDetalles(document.getString("detalles"));
         
         // Leer alarmasActivas (por defecto true, consistente con React)
