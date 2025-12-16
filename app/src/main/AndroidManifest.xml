@@ -27,8 +27,21 @@
          es gestionar recordatorios de medicamentos, similar a aplicaciones de calendario y alarmas.
     -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"
+        tools:ignore="ExactAlarmPolicy" />
+    <!-- Permisos para Foreground Services (Android 14+) -->
+    <!-- 
+         JUSTIFICACIÓN PARA FOREGROUND SERVICE:
+         Esta aplicación requiere un servicio en primer plano para verificar periódicamente el estado de las tomas
+         de medicamentos programadas. Este servicio es esencial para:
+         1. Monitorear automáticamente el estado de las tomas (retraso, omitida)
+         2. Actualizar estados de adherencia al tratamiento en tiempo real
+         3. Garantizar que los usuarios reciban notificaciones precisas sobre sus medicamentos
+         4. Mantener la sincronización de datos de salud críticos
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
 
     <application
         android:allowBackup="true"
@@ -132,10 +145,16 @@
         </receiver>
 
         <!-- Servicio para verificar estados de tomas periódicamente -->
+        <!-- 
+             Este servicio verifica periódicamente el estado de las tomas de medicamentos programadas
+             y actualiza automáticamente los estados (retraso, omitida) para mantener la adherencia al tratamiento.
+        -->
         <service
             android:name=".services.TomaStateCheckerService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="health"
+            tools:ignore="ForegroundServicePermission" />
 
     </application>
 
