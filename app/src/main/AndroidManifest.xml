@@ -9,6 +9,23 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Permisos para alarmas exactas de medicamentos -->
+    <!-- 
+         JUSTIFICACIÓN PARA USE_EXACT_ALARM:
+         Esta aplicación es un sistema de gestión de medicamentos que requiere alarmas exactas para recordatorios
+         críticos de salud. Los usuarios dependen de recordatorios precisos para tomar medicamentos en horarios
+         específicos, lo cual es esencial para:
+         1. Adherencia al tratamiento médico
+         2. Efectividad de medicamentos con ventanas de tiempo críticas
+         3. Prevención de sobredosis o dosis omitidas
+         4. Gestión de condiciones médicas crónicas
+         
+         El uso de setExactAndAllowWhileIdle() es necesario para garantizar que los recordatorios se disparen
+         incluso cuando el dispositivo está en modo de ahorro de energía, lo cual es crítico para la salud del usuario.
+         
+         Esta aplicación cumple con los criterios de Google Play para USE_EXACT_ALARM ya que su función principal
+         es gestionar recordatorios de medicamentos, similar a aplicaciones de calendario y alarmas.
+    -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
