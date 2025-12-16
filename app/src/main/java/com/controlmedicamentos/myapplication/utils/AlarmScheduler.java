@@ -133,10 +133,11 @@ public class AlarmScheduler {
      */
     private void programarAlarmasRecurrentes(Medicamento medicamento, String horario, 
                                             int indiceHorario, Calendar primeraAlarma) {
-        // LIMITAR: Solo programar alarmas para los próximos 30 días
+        // LIMITAR: Solo programar alarmas para los próximos 7 días
         // Cuando se ejecute una alarma, se programará la siguiente en el ciclo
         // Esto evita exceder el límite de 500 alarmas concurrentes de Android
-        final int DIAS_PROGRAMADOS = 30;
+        // REDUCIDO de 30 a 7 días para evitar el límite con muchos medicamentos
+        final int DIAS_PROGRAMADOS = 7;
         
         // Si el medicamento tiene días de tratamiento definidos y no es crónico
         if (medicamento.getDiasTratamiento() > 0) {
@@ -260,7 +261,7 @@ public class AlarmScheduler {
             }
         }
         
-        Log.d(TAG, "Alarmas recurrentes programadas (30 días) para: " + medicamento.getNombre() + 
+        Log.d(TAG, "Alarmas recurrentes programadas (" + DIAS_PROGRAMADOS + " días) para: " + medicamento.getNombre() + 
               " horario " + horario);
     }
     
@@ -324,24 +325,37 @@ public class AlarmScheduler {
      * Programa una alarma usando el método apropiado según la versión de Android
      */
     private void programarAlarma(long timeInMillis, PendingIntent pendingIntent) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                timeInMillis,
-                pendingIntent
-            );
-        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-            alarmManager.setExact(
-                AlarmManager.RTC_WAKEUP,
-                timeInMillis,
-                pendingIntent
-            );
-        } else {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                timeInMillis,
-                pendingIntent
-            );
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    timeInMillis,
+                    pendingIntent
+                );
+            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+                alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP,
+                    timeInMillis,
+                    pendingIntent
+                );
+            } else {
+                alarmManager.set(
+                    AlarmManager.RTC_WAKEUP,
+                    timeInMillis,
+                    pendingIntent
+                );
+            }
+        } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("Maximum limit")) {
+                Log.e(TAG, "❌ LÍMITE DE ALARMAS ALCANZADO (500). No se pueden programar más alarmas.", e);
+                throw e; // Re-lanzar para que el código que llama pueda manejarlo
+            } else {
+                Log.e(TAG, "Error al programar alarma", e);
+                throw e;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error inesperado al programar alarma", e);
+            throw new RuntimeException(e);
         }
     }
     

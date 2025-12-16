@@ -151,33 +151,112 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     }
 
     private void cargarMedicamentos() {
+        Log.d(TAG, "cargarMedicamentos: ========== INICIANDO CARGA DE MEDICAMENTOS ==========");
+        Logger.d(TAG, "cargarMedicamentos: ========== INICIANDO CARGA DE MEDICAMENTOS ==========");
+        
         // Verificar conexión a internet
         if (!NetworkUtils.isNetworkAvailable(this)) {
+            Log.w(TAG, "cargarMedicamentos: ⚠️ No hay conexión a internet");
+            Logger.w(TAG, "cargarMedicamentos: ⚠️ No hay conexión a internet");
             Toast.makeText(this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
             return;
         }
+        
+        Log.d(TAG, "cargarMedicamentos: Conexión a internet disponible, iniciando consulta a Firestore");
+        Logger.d(TAG, "cargarMedicamentos: Conexión a internet disponible, iniciando consulta a Firestore");
 
         // Cargar todos los medicamentos desde Firebase
         firebaseService.obtenerMedicamentos(new FirebaseService.FirestoreListCallback() {
             @Override
             public void onSuccess(List<?> result) {
+                Logger.d(TAG, "cargarMedicamentos: onSuccess recibido. result != null: " + (result != null));
+                
                 List<Medicamento> todosLosMedicamentos = new ArrayList<>();
                 if (result != null) {
                     @SuppressWarnings("unchecked")
                     List<Medicamento> resultList = (List<Medicamento>) result;
                     todosLosMedicamentos = resultList;
+                    Logger.d(TAG, "cargarMedicamentos: Total medicamentos recibidos de Firestore: " + todosLosMedicamentos.size());
+                    
+                    // Log detallado de cada medicamento
+                    for (int i = 0; i < todosLosMedicamentos.size(); i++) {
+                        Medicamento m = todosLosMedicamentos.get(i);
+                        Logger.d(TAG, String.format("cargarMedicamentos: [%d] ID=%s, Nombre=%s, TomasDiarias=%d, StockActual=%d, Pausado=%s", 
+                            i, m.getId(), m.getNombre(), m.getTomasDiarias(), m.getStockActual(), m.isPausado()));
+                    }
+                } else {
+                    Logger.w(TAG, "cargarMedicamentos: ⚠️ result es null");
+                }
+                
+                // Verificar duplicados por ID
+                Set<String> idsVistos = new HashSet<>();
+                List<String> idsDuplicados = new ArrayList<>();
+                for (Medicamento m : todosLosMedicamentos) {
+                    if (idsVistos.contains(m.getId())) {
+                        Logger.w(TAG, "cargarMedicamentos: ⚠️ DUPLICADO EN LISTA - ID: " + m.getId() + ", Nombre: " + m.getNombre());
+                        idsDuplicados.add(m.getId());
+                    } else {
+                        idsVistos.add(m.getId());
+                    }
+                }
+                
+                if (!idsDuplicados.isEmpty()) {
+                    Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - Medicamentos duplicados en la lista: " + idsDuplicados.toString());
                 }
                 
                 // Separar medicamentos por tipo
+                Logger.d(TAG, "cargarMedicamentos: Separando medicamentos...");
                 separarMedicamentos(todosLosMedicamentos);
                 
-                // Actualizar adapters
-                adapterTratamiento.actualizarMedicamentos(medicamentosTratamiento);
-                adapterTratamientoSinStock.actualizarMedicamentos(medicamentosTratamientoSinStock);
-                adapterOcasionales.actualizarMedicamentos(medicamentosOcasionales);
+                Logger.d(TAG, String.format("cargarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
+                    medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
                 
-                // Mostrar/ocultar secciones según corresponda
-                actualizarVisibilidadSecciones();
+                // Log detallado de cada sección
+                Logger.d(TAG, "=== TRATAMIENTOS (CON STOCK) ===");
+                for (int i = 0; i < medicamentosTratamiento.size(); i++) {
+                    Medicamento m = medicamentosTratamiento.get(i);
+                    Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
+                }
+                
+                Logger.d(TAG, "=== TRATAMIENTOS (SIN STOCK) ===");
+                for (int i = 0; i < medicamentosTratamientoSinStock.size(); i++) {
+                    Medicamento m = medicamentosTratamientoSinStock.get(i);
+                    Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
+                }
+                
+                Logger.d(TAG, "=== OCASIONALES ===");
+                for (int i = 0; i < medicamentosOcasionales.size(); i++) {
+                    Medicamento m = medicamentosOcasionales.get(i);
+                    Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
+                }
+                
+                // Actualizar adapters en el hilo principal
+                Logger.d(TAG, "cargarMedicamentos: Actualizando adapters en hilo principal...");
+                runOnUiThread(() -> {
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] Actualizando adapterTratamiento con " + medicamentosTratamiento.size() + " medicamentos");
+                    adapterTratamiento.actualizarMedicamentos(medicamentosTratamiento);
+                    
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] Actualizando adapterTratamientoSinStock con " + medicamentosTratamientoSinStock.size() + " medicamentos");
+                    adapterTratamientoSinStock.actualizarMedicamentos(medicamentosTratamientoSinStock);
+                    
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] Actualizando adapterOcasionales con " + medicamentosOcasionales.size() + " medicamentos");
+                    adapterOcasionales.actualizarMedicamentos(medicamentosOcasionales);
+                    
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] Adapters actualizados, verificando RecyclerViews...");
+                    
+                    // Verificar que los RecyclerViews estén correctamente configurados
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] rvMedicamentosTratamiento != null: " + (rvMedicamentosTratamiento != null) + 
+                        ", adapter != null: " + (rvMedicamentosTratamiento != null && rvMedicamentosTratamiento.getAdapter() != null));
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] rvMedicamentosTratamientoSinStock != null: " + (rvMedicamentosTratamientoSinStock != null) + 
+                        ", adapter != null: " + (rvMedicamentosTratamientoSinStock != null && rvMedicamentosTratamientoSinStock.getAdapter() != null));
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] rvMedicamentosOcasionales != null: " + (rvMedicamentosOcasionales != null) + 
+                        ", adapter != null: " + (rvMedicamentosOcasionales != null && rvMedicamentosOcasionales.getAdapter() != null));
+                    
+                    // Mostrar/ocultar secciones según corresponda
+                    actualizarVisibilidadSecciones();
+                    
+                    Logger.d(TAG, "cargarMedicamentos: [UI Thread] Actualización de UI completada");
+                });
                 
                 Log.d(TAG, "Medicamentos cargados: " + medicamentosTratamiento.size() + " con tratamiento (con stock), " + 
                       medicamentosTratamientoSinStock.size() + " con tratamiento (sin stock), " +
@@ -185,7 +264,13 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 
                 if (todosLosMedicamentos.isEmpty()) {
                     Toast.makeText(BotiquinActivity.this, "No tienes medicamentos registrados", Toast.LENGTH_SHORT).show();
+                } else if (medicamentosTratamiento.size() + medicamentosTratamientoSinStock.size() + medicamentosOcasionales.size() != todosLosMedicamentos.size()) {
+                    Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - La suma de secciones no coincide con el total. Total: " + 
+                        todosLosMedicamentos.size() + ", Suma secciones: " + 
+                        (medicamentosTratamiento.size() + medicamentosTratamientoSinStock.size() + medicamentosOcasionales.size()));
                 }
+                
+                Logger.d(TAG, "cargarMedicamentos: ========== CARGA COMPLETADA ==========");
             }
 
             @Override
@@ -241,32 +326,92 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     }
 
     private void actualizarVisibilidadSecciones() {
+        Logger.d(TAG, "actualizarVisibilidadSecciones: ========== ACTUALIZANDO VISIBILIDAD ==========");
+        Logger.d(TAG, String.format("actualizarVisibilidadSecciones: Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
+            medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
+        
         // Sección de tratamientos con stock
         if (medicamentosTratamiento.isEmpty()) {
-            tvTituloTratamiento.setVisibility(View.GONE);
-            rvMedicamentosTratamiento.setVisibility(View.GONE);
+            Logger.d(TAG, "actualizarVisibilidadSecciones: Ocultando sección Tratamiento (con stock) - vacía");
+            if (tvTituloTratamiento != null) {
+                tvTituloTratamiento.setVisibility(View.GONE);
+            }
+            if (rvMedicamentosTratamiento != null) {
+                rvMedicamentosTratamiento.setVisibility(View.GONE);
+            }
         } else {
-            tvTituloTratamiento.setVisibility(View.VISIBLE);
-            rvMedicamentosTratamiento.setVisibility(View.VISIBLE);
+            Logger.d(TAG, "actualizarVisibilidadSecciones: Mostrando sección Tratamiento (con stock) - " + medicamentosTratamiento.size() + " medicamentos");
+            if (tvTituloTratamiento != null) {
+                tvTituloTratamiento.setVisibility(View.VISIBLE);
+                Logger.d(TAG, "actualizarVisibilidadSecciones: tvTituloTratamiento.setVisibility(VISIBLE) llamado");
+            }
+            if (rvMedicamentosTratamiento != null) {
+                rvMedicamentosTratamiento.setVisibility(View.VISIBLE);
+                Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosTratamiento.setVisibility(VISIBLE) llamado");
+                Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosTratamiento.getAdapter() != null: " + 
+                    (rvMedicamentosTratamiento.getAdapter() != null));
+                if (rvMedicamentosTratamiento.getAdapter() != null) {
+                    Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosTratamiento.getAdapter().getItemCount()=" + 
+                        rvMedicamentosTratamiento.getAdapter().getItemCount());
+                }
+            }
         }
         
         // Sección de tratamientos sin stock
         if (medicamentosTratamientoSinStock.isEmpty()) {
-            tvTituloTratamientoSinStock.setVisibility(View.GONE);
-            rvMedicamentosTratamientoSinStock.setVisibility(View.GONE);
+            Logger.d(TAG, "actualizarVisibilidadSecciones: Ocultando sección Tratamiento (sin stock) - vacía");
+            if (tvTituloTratamientoSinStock != null) {
+                tvTituloTratamientoSinStock.setVisibility(View.GONE);
+            }
+            if (rvMedicamentosTratamientoSinStock != null) {
+                rvMedicamentosTratamientoSinStock.setVisibility(View.GONE);
+            }
         } else {
-            tvTituloTratamientoSinStock.setVisibility(View.VISIBLE);
-            rvMedicamentosTratamientoSinStock.setVisibility(View.VISIBLE);
+            Logger.d(TAG, "actualizarVisibilidadSecciones: Mostrando sección Tratamiento (sin stock) - " + medicamentosTratamientoSinStock.size() + " medicamentos");
+            if (tvTituloTratamientoSinStock != null) {
+                tvTituloTratamientoSinStock.setVisibility(View.VISIBLE);
+                Logger.d(TAG, "actualizarVisibilidadSecciones: tvTituloTratamientoSinStock.setVisibility(VISIBLE) llamado");
+            }
+            if (rvMedicamentosTratamientoSinStock != null) {
+                rvMedicamentosTratamientoSinStock.setVisibility(View.VISIBLE);
+                Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosTratamientoSinStock.setVisibility(VISIBLE) llamado");
+                Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosTratamientoSinStock.getAdapter() != null: " + 
+                    (rvMedicamentosTratamientoSinStock.getAdapter() != null));
+                if (rvMedicamentosTratamientoSinStock.getAdapter() != null) {
+                    Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosTratamientoSinStock.getAdapter().getItemCount()=" + 
+                        rvMedicamentosTratamientoSinStock.getAdapter().getItemCount());
+                }
+            }
         }
         
         // Sección de ocasionales
         if (medicamentosOcasionales.isEmpty()) {
-            tvTituloOcasionales.setVisibility(View.GONE);
-            rvMedicamentosOcasionales.setVisibility(View.GONE);
+            Logger.d(TAG, "actualizarVisibilidadSecciones: Ocultando sección Ocasionales - vacía");
+            if (tvTituloOcasionales != null) {
+                tvTituloOcasionales.setVisibility(View.GONE);
+            }
+            if (rvMedicamentosOcasionales != null) {
+                rvMedicamentosOcasionales.setVisibility(View.GONE);
+            }
         } else {
-            tvTituloOcasionales.setVisibility(View.VISIBLE);
-            rvMedicamentosOcasionales.setVisibility(View.VISIBLE);
+            Logger.d(TAG, "actualizarVisibilidadSecciones: Mostrando sección Ocasionales - " + medicamentosOcasionales.size() + " medicamentos");
+            if (tvTituloOcasionales != null) {
+                tvTituloOcasionales.setVisibility(View.VISIBLE);
+                Logger.d(TAG, "actualizarVisibilidadSecciones: tvTituloOcasionales.setVisibility(VISIBLE) llamado");
+            }
+            if (rvMedicamentosOcasionales != null) {
+                rvMedicamentosOcasionales.setVisibility(View.VISIBLE);
+                Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosOcasionales.setVisibility(VISIBLE) llamado");
+                Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosOcasionales.getAdapter() != null: " + 
+                    (rvMedicamentosOcasionales.getAdapter() != null));
+                if (rvMedicamentosOcasionales.getAdapter() != null) {
+                    Logger.d(TAG, "actualizarVisibilidadSecciones: rvMedicamentosOcasionales.getAdapter().getItemCount()=" + 
+                        rvMedicamentosOcasionales.getAdapter().getItemCount());
+                }
+            }
         }
+        
+        Logger.d(TAG, "actualizarVisibilidadSecciones: ========== VISIBILIDAD ACTUALIZADA ==========");
     }
 
     @Override

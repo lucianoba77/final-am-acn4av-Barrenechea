@@ -1223,6 +1223,7 @@ public class FirebaseService {
         Logger.d(TAG, String.format("mapToMedicamento: ✅ Mapeo completado para '%s' (ID: %s) - TomasDiarias: %d, StockActual: %d, Pausado: %s", 
             medicamento.getNombre(), medicamento.getId(), medicamento.getTomasDiarias(), 
             medicamento.getStockActual(), medicamento.isPausado()));
+        Logger.d(TAG, "mapToMedicamento: ========== MAPEO FINALIZADO ==========");
         
         return medicamento;
     }

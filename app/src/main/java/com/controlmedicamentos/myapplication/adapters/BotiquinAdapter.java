@@ -47,9 +47,16 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
 
     @Override
     public void onBindViewHolder(@NonNull BotiquinViewHolder holder, int position) {
+        android.util.Log.d("BotiquinAdapter", "onBindViewHolder: position=" + position + ", medicamentos.size()=" + 
+            (medicamentos != null ? medicamentos.size() : 0));
         if (medicamentos != null && position < medicamentos.size()) {
             Medicamento medicamento = medicamentos.get(position);
+            android.util.Log.d("BotiquinAdapter", "onBindViewHolder: Binding medicamento '" + medicamento.getNombre() + 
+                "' (ID: " + medicamento.getId() + ") en posición " + position);
             holder.bind(medicamento);
+        } else {
+            android.util.Log.w("BotiquinAdapter", "onBindViewHolder: ⚠️ Posición fuera de rango - position=" + position + 
+                ", medicamentos.size()=" + (medicamentos != null ? medicamentos.size() : 0));
         }
     }
 
@@ -59,8 +66,26 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
     }
 
     public void actualizarMedicamentos(List<Medicamento> nuevosMedicamentos) {
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: ========== INICIANDO ACTUALIZACIÓN ==========");
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: nuevosMedicamentos != null: " + (nuevosMedicamentos != null));
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: nuevosMedicamentos.size(): " + 
+            (nuevosMedicamentos != null ? nuevosMedicamentos.size() : 0));
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: medicamentos actuales.size(): " + 
+            (this.medicamentos != null ? this.medicamentos.size() : 0));
+        
         this.medicamentos = nuevosMedicamentos != null ? nuevosMedicamentos : new java.util.ArrayList<>();
+        
+        // Log detallado de cada medicamento
+        for (int i = 0; i < this.medicamentos.size(); i++) {
+            Medicamento m = this.medicamentos.get(i);
+            android.util.Log.d("BotiquinAdapter", String.format("actualizarMedicamentos: [%d] %s (ID: %s, TomasDiarias: %d, StockActual: %d)", 
+                i, m.getNombre(), m.getId(), m.getTomasDiarias(), m.getStockActual()));
+        }
+        
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: Llamando notifyDataSetChanged()...");
         notifyDataSetChanged();
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: notifyDataSetChanged() completado. getItemCount()=" + getItemCount());
+        android.util.Log.d("BotiquinAdapter", "actualizarMedicamentos: ========== ACTUALIZACIÓN COMPLETADA ==========");
     }
 
     class BotiquinViewHolder extends RecyclerView.ViewHolder {
