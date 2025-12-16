@@ -28,7 +28,9 @@ import com.controlmedicamentos.myapplication.utils.Logger;
 import com.controlmedicamentos.myapplication.utils.NavigationHelper;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapter.OnMedicamentoClickListener {
 
@@ -36,16 +38,20 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     
     // RecyclerViews para cada sección
     private RecyclerView rvMedicamentosTratamiento;
+    private RecyclerView rvMedicamentosTratamientoSinStock;
     private RecyclerView rvMedicamentosOcasionales;
     private TextView tvTituloTratamiento;
+    private TextView tvTituloTratamientoSinStock;
     private TextView tvTituloOcasionales;
     
     // Adapters
     private BotiquinAdapter adapterTratamiento;
+    private BotiquinAdapter adapterTratamientoSinStock;
     private BotiquinAdapter adapterOcasionales;
     
     // Listas de medicamentos
     private final List<Medicamento> medicamentosTratamiento = new ArrayList<>();
+    private final List<Medicamento> medicamentosTratamientoSinStock = new ArrayList<>();
     private final List<Medicamento> medicamentosOcasionales = new ArrayList<>();
     
     // Botones de navegación
@@ -99,8 +105,10 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
 
     private void inicializarVistas() {
         rvMedicamentosTratamiento = findViewById(R.id.rvMedicamentosTratamiento);
+        rvMedicamentosTratamientoSinStock = findViewById(R.id.rvMedicamentosTratamientoSinStock);
         rvMedicamentosOcasionales = findViewById(R.id.rvMedicamentosOcasionales);
         tvTituloTratamiento = findViewById(R.id.tvTituloTratamiento);
+        tvTituloTratamientoSinStock = findViewById(R.id.tvTituloTratamientoSinStock);
         tvTituloOcasionales = findViewById(R.id.tvTituloOcasionales);
         
         // Botones de navegación
@@ -112,11 +120,17 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     }
 
     private void configurarRecyclerViews() {
-        // Adapter para medicamentos con tratamiento
+        // Adapter para medicamentos con tratamiento (con stock)
         adapterTratamiento = new BotiquinAdapter(this, medicamentosTratamiento);
         adapterTratamiento.setOnMedicamentoClickListener(this);
         rvMedicamentosTratamiento.setLayoutManager(new LinearLayoutManager(this));
         rvMedicamentosTratamiento.setAdapter(adapterTratamiento);
+        
+        // Adapter para medicamentos con tratamiento (sin stock)
+        adapterTratamientoSinStock = new BotiquinAdapter(this, medicamentosTratamientoSinStock);
+        adapterTratamientoSinStock.setOnMedicamentoClickListener(this);
+        rvMedicamentosTratamientoSinStock.setLayoutManager(new LinearLayoutManager(this));
+        rvMedicamentosTratamientoSinStock.setAdapter(adapterTratamientoSinStock);
         
         // Adapter para medicamentos ocasionales
         adapterOcasionales = new BotiquinAdapter(this, medicamentosOcasionales);
@@ -159,12 +173,14 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 
                 // Actualizar adapters
                 adapterTratamiento.actualizarMedicamentos(medicamentosTratamiento);
+                adapterTratamientoSinStock.actualizarMedicamentos(medicamentosTratamientoSinStock);
                 adapterOcasionales.actualizarMedicamentos(medicamentosOcasionales);
                 
                 // Mostrar/ocultar secciones según corresponda
                 actualizarVisibilidadSecciones();
                 
-                Log.d(TAG, "Medicamentos cargados: " + medicamentosTratamiento.size() + " con tratamiento, " + 
+                Log.d(TAG, "Medicamentos cargados: " + medicamentosTratamiento.size() + " con tratamiento (con stock), " + 
+                      medicamentosTratamientoSinStock.size() + " con tratamiento (sin stock), " +
                       medicamentosOcasionales.size() + " ocasionales");
                 
                 if (todosLosMedicamentos.isEmpty()) {
@@ -183,28 +199,64 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     }
 
     private void separarMedicamentos(List<Medicamento> todosLosMedicamentos) {
+        Logger.d(TAG, "separarMedicamentos: Iniciando separación de " + todosLosMedicamentos.size() + " medicamentos");
+        
         medicamentosTratamiento.clear();
+        medicamentosTratamientoSinStock.clear();
         medicamentosOcasionales.clear();
         
         for (Medicamento medicamento : todosLosMedicamentos) {
+            if (medicamento == null) {
+                Logger.w(TAG, "separarMedicamentos: ⚠️ Medicamento null encontrado, saltando");
+                continue;
+            }
+            
+            String nombre = medicamento.getNombre() != null ? medicamento.getNombre() : "SIN_NOMBRE";
+            int tomasDiarias = medicamento.getTomasDiarias();
+            int stockActual = medicamento.getStockActual();
+            boolean pausado = medicamento.isPausado();
+            
+            Logger.d(TAG, String.format("separarMedicamentos: Procesando '%s' - TomasDiarias=%d, StockActual=%d, Pausado=%s", 
+                nombre, tomasDiarias, stockActual, pausado));
+            
             // Medicamentos con tratamiento: tomasDiarias > 0
-            if (medicamento.getTomasDiarias() > 0) {
-                medicamentosTratamiento.add(medicamento);
+            if (tomasDiarias > 0) {
+                // Separar por stock: si tiene stock (stockActual > 0) va a tratamiento, si no tiene stock va a tratamiento sin stock
+                if (stockActual > 0) {
+                    medicamentosTratamiento.add(medicamento);
+                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (con stock)", nombre));
+                } else {
+                    medicamentosTratamientoSinStock.add(medicamento);
+                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (sin stock)", nombre));
+                }
             } else {
                 // Medicamentos ocasionales: tomasDiarias = 0
                 medicamentosOcasionales.add(medicamento);
+                Logger.d(TAG, String.format("separarMedicamentos: '%s' -> OCASIONAL", nombre));
             }
         }
+        
+        Logger.d(TAG, String.format("separarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
+            medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
     }
 
     private void actualizarVisibilidadSecciones() {
-        // Sección de tratamientos
+        // Sección de tratamientos con stock
         if (medicamentosTratamiento.isEmpty()) {
             tvTituloTratamiento.setVisibility(View.GONE);
             rvMedicamentosTratamiento.setVisibility(View.GONE);
         } else {
             tvTituloTratamiento.setVisibility(View.VISIBLE);
             rvMedicamentosTratamiento.setVisibility(View.VISIBLE);
+        }
+        
+        // Sección de tratamientos sin stock
+        if (medicamentosTratamientoSinStock.isEmpty()) {
+            tvTituloTratamientoSinStock.setVisibility(View.GONE);
+            rvMedicamentosTratamientoSinStock.setVisibility(View.GONE);
+        } else {
+            tvTituloTratamientoSinStock.setVisibility(View.VISIBLE);
+            rvMedicamentosTratamientoSinStock.setVisibility(View.VISIBLE);
         }
         
         // Sección de ocasionales

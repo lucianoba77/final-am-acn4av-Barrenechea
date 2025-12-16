@@ -99,14 +99,20 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
             // Configurar presentación
             tvPresentacion.setText(medicamento.getPresentacion());
 
-            // Configurar stock (solo si tiene stock y no está vencido)
-            if (medicamento.getStockActual() > 0 && !medicamento.estaVencido()) {
+            // Configurar stock (mostrar siempre, incluso si es 0)
+            if (!medicamento.estaVencido()) {
                 String stockText = "Stock: " + medicamento.getStockActual();
                 if (medicamento.getStockInicial() > 0) {
                     stockText += "/" + medicamento.getStockInicial();
                 }
                 tvStock.setText(stockText);
                 tvStock.setVisibility(TextView.VISIBLE);
+                // Si no hay stock, mostrar en color de advertencia
+                if (medicamento.getStockActual() == 0) {
+                    tvStock.setTextColor(context.getColor(R.color.warning));
+                } else {
+                    tvStock.setTextColor(context.getColor(R.color.black));
+                }
             } else {
                 tvStock.setVisibility(TextView.GONE);
             }
@@ -122,7 +128,7 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
                 btnEditar.setVisibility(View.VISIBLE);
                 btnEliminar.setVisibility(View.VISIBLE);
             } else {
-                // Si tiene stock y no está vencido, mostrar "Activo"
+                // Si no está vencido, mostrar estado según stock
                 if (medicamento.getStockActual() > 0) {
                     tvEstado.setText("Activo");
                     tvEstado.setTextColor(context.getColor(R.color.success));
@@ -148,9 +154,20 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
                     btnEliminar.setVisibility(View.VISIBLE);
                 } else {
                     // Sin stock
-                    tvEstado.setText("Sin stock");
+                    tvEstado.setText("Sin Stock");
                     tvEstado.setTextColor(context.getColor(R.color.warning));
-                    tvFechaVencimiento.setVisibility(TextView.GONE);
+                    
+                    // Mostrar fecha de vencimiento si existe
+                    if (medicamento.getFechaVencimiento() != null) {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+                        String fechaVencimiento = dateFormat.format(medicamento.getFechaVencimiento());
+                        tvFechaVencimiento.setText("Vence: " + fechaVencimiento);
+                        tvFechaVencimiento.setVisibility(TextView.VISIBLE);
+                    } else {
+                        tvFechaVencimiento.setVisibility(TextView.GONE);
+                    }
+                    
+                    // No mostrar botón "Tomé una" si no hay stock
                     btnTomeUna.setVisibility(View.GONE);
                     btnEditar.setVisibility(View.VISIBLE);
                     btnEliminar.setVisibility(View.VISIBLE);

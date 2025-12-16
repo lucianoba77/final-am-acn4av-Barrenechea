@@ -26,9 +26,11 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Servicio para manejar operaciones CRUD con Firebase Firestore
@@ -717,17 +719,54 @@ public class FirebaseService {
             return;
         }
 
+        String userId = firebaseUser.getUid();
+        Logger.d(TAG, "obtenerMedicamentos: Iniciando consulta para userId: " + userId);
+
         db.collection(COLLECTION_MEDICAMENTOS)
-            .whereEqualTo("userId", firebaseUser.getUid())
+            .whereEqualTo("userId", userId)
             .get()
             .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
                 @Override
                 public void onComplete(@NonNull Task<QuerySnapshot> task) {
                     if (task.isSuccessful()) {
+                        QuerySnapshot querySnapshot = task.getResult();
+                        Logger.d(TAG, "obtenerMedicamentos: Consulta exitosa. Documentos encontrados: " + 
+                            (querySnapshot != null ? querySnapshot.size() : 0));
+                        
                         List<Medicamento> medicamentos = new ArrayList<>();
-                        for (DocumentSnapshot document : task.getResult()) {
-                            Medicamento medicamento = mapToMedicamento(document);
-                            medicamentos.add(medicamento);
+                        Set<String> idsVistos = new HashSet<>(); // Para detectar duplicados
+                        List<String> idsDuplicados = new ArrayList<>();
+                        
+                        if (querySnapshot != null) {
+                            for (DocumentSnapshot document : querySnapshot) {
+                                String docId = document.getId();
+                                Logger.d(TAG, "obtenerMedicamentos: Procesando documento ID: " + docId);
+                                
+                                // Verificar duplicados
+                                if (idsVistos.contains(docId)) {
+                                    Logger.w(TAG, "obtenerMedicamentos: ⚠️ DUPLICADO DETECTADO - ID: " + docId);
+                                    idsDuplicados.add(docId);
+                                    continue; // Saltar duplicados
+                                }
+                                idsVistos.add(docId);
+                                
+                                Medicamento medicamento = mapToMedicamento(document);
+                                if (medicamento != null) {
+                                    Logger.d(TAG, "obtenerMedicamentos: Medicamento mapeado - ID: " + medicamento.getId() + 
+                                        ", Nombre: " + medicamento.getNombre() + 
+                                        ", TomasDiarias: " + medicamento.getTomasDiarias() + 
+                                        ", StockActual: " + medicamento.getStockActual() +
+                                        ", Pausado: " + medicamento.isPausado());
+                                    medicamentos.add(medicamento);
+                                } else {
+                                    Logger.e(TAG, "obtenerMedicamentos: ⚠️ ERROR - Medicamento null para documento ID: " + docId);
+                                }
+                            }
+                        }
+                        
+                        Logger.d(TAG, "obtenerMedicamentos: Total medicamentos procesados: " + medicamentos.size());
+                        if (!idsDuplicados.isEmpty()) {
+                            Logger.w(TAG, "obtenerMedicamentos: ⚠️ IDs duplicados encontrados: " + idsDuplicados.toString());
                         }
                         if (callback != null) {
                             callback.onSuccess(medicamentos);
@@ -1036,6 +1075,9 @@ public class FirebaseService {
         // Ahora establecer tomasDiarias después de horarioPrimeraToma
         medicamento.setTomasDiarias(tomasDiarias);
         
+        Logger.d(TAG, "mapToMedicamento: TomasDiarias establecido: " + tomasDiarias + 
+            ", HorarioPrimeraToma: " + medicamento.getHorarioPrimeraToma());
+        
         medicamento.setAfeccion(document.getString("afeccion"));
         
         if (document.get("stockInicial") != null) {
@@ -1047,8 +1089,15 @@ public class FirebaseService {
         if (document.get("stockActual") != null) {
             Object stockObj = document.get("stockActual");
             if (stockObj instanceof Number) {
-                medicamento.setStockActual(((Number) stockObj).intValue());
+                int stockActual = ((Number) stockObj).intValue();
+                medicamento.setStockActual(stockActual);
+                Logger.d(TAG, "mapToMedicamento: StockActual establecido: " + stockActual);
+            } else {
+                Logger.w(TAG, "mapToMedicamento: ⚠️ stockActual no es Number, es: " + 
+                    (stockObj != null ? stockObj.getClass().getName() : "null"));
             }
+        } else {
+            Logger.w(TAG, "mapToMedicamento: ⚠️ stockActual es null en documento");
         }
         if (document.get("color") != null) {
             try {
