@@ -1,8 +1,8 @@
 package com.controlmedicamentos.myapplication.utils;
 
-import android.util.Log;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
+import com.controlmedicamentos.myapplication.utils.Logger;
 import com.controlmedicamentos.myapplication.services.TomaTrackingService;
 import java.util.ArrayList;
 import java.util.Calendar;

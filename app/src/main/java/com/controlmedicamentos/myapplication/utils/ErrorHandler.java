@@ -57,11 +57,12 @@ public class ErrorHandler {
 
     /**
      * Obtiene un mensaje de error amigable para el usuario basado en el tipo de excepción.
-     * 
+     * Expuesto como público para permitir tests unitarios del mapeo de excepciones a mensajes.
+     *
      * @param error Excepción que se produjo
      * @return Mensaje de error amigable
      */
-    private static String getErrorMessage(Exception error) {
+    public static String getErrorMessage(Exception error) {
         if (error == null) {
             return "Ocurrió un error desconocido. Intenta nuevamente.";
         }
