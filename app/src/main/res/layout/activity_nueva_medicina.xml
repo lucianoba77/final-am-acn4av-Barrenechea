@@ -152,6 +152,22 @@
                         android:backgroundTint="@color/primary"
                         android:layout_marginBottom="@dimen/margin_medium" />
 
+                    <!-- Programación personalizada por día -->
+                    <CheckBox
+                        android:id="@+id/checkUsarProgramacionPersonalizada"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/programacion_personalizada_use"
+                        android:textSize="@dimen/text_size_medium"
+                        android:layout_marginBottom="@dimen/margin_small" />
+                    <LinearLayout
+                        android:id="@+id/programacionDiasContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone"
+                        android:layout_marginBottom="@dimen/margin_medium" />
+
                     <!-- Stock inicial -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilStockInicial"
@@ -227,24 +243,32 @@
                     android:orientation="vertical"
                     android:padding="@dimen/padding_medium">
 
-                    <!-- Color del medicamento -->
-                    <TextView
+                    <!-- Color del medicamento (oculto: asignación automática por índice) -->
+                    <LinearLayout
+                        android:id="@+id/layoutColorMedicamento"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/field_medicine_color"
-                        android:textSize="@dimen/text_size_medium"
-                        android:textColor="@color/black"
-                        android:textStyle="bold"
-                        android:layout_marginBottom="@dimen/margin_small" />
+                        android:orientation="vertical"
+                        android:visibility="gone">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSeleccionarColor"
-                        android:layout_width="match_parent"
-                        android:layout_height="@dimen/button_height_medium"
-                        android:text="@string/btn_select_color"
-                        android:textColor="@color/white"
-                        android:backgroundTint="@color/medicamento_azul"
-                        android:layout_marginBottom="@dimen/margin_medium" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/field_medicine_color"
+                            android:textSize="@dimen/text_size_medium"
+                            android:textColor="@color/black"
+                            android:textStyle="bold"
+                            android:layout_marginBottom="@dimen/margin_small" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSeleccionarColor"
+                            android:layout_width="match_parent"
+                            android:layout_height="@dimen/button_height_medium"
+                            android:text="@string/btn_select_color"
+                            android:textColor="@color/white"
+                            android:backgroundTint="@color/medicamento_azul"
+                            android:layout_marginBottom="@dimen/margin_medium" />
+                    </LinearLayout>
 
                     <!-- Fecha de vencimiento -->
                     <TextView

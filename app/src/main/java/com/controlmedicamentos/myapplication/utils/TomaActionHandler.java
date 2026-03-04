@@ -7,8 +7,11 @@ import com.controlmedicamentos.myapplication.models.Toma;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.services.TomaTrackingService;
+import com.google.firebase.auth.FirebaseAuth;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Clase de utilidad para manejar acciones relacionadas con tomas de medicamentos.
@@ -179,6 +182,27 @@ public class TomaActionHandler {
                 firebaseService.actualizarMedicamento(medicamento, context, new FirebaseService.FirestoreCallback() {
                     @Override
                     public void onSuccess(Object updateResult) {
+                        // Actualizar también medicamento.tomasRealizadas para que la versión web vea la toma
+                        Date fechaProgramada = tomaProximaFinal.getFechaHoraProgramada();
+                        String fechaStr = fechaProgramada != null
+                                ? new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(fechaProgramada)
+                                : new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+                        String horaStr = tomaProximaFinal.getHorario();
+                        String userId = FirebaseAuth.getInstance().getCurrentUser() != null
+                                ? FirebaseAuth.getInstance().getCurrentUser().getUid()
+                                : null;
+                        if (userId != null && horaStr != null) {
+                            firebaseService.appendTomaRealizadaAlMedicamento(
+                                    medicamento.getId(), userId, fechaStr, horaStr,
+                                    new FirebaseService.FirestoreCallback() {
+                                        @Override
+                                        public void onSuccess(Object o) { /* opcional */ }
+                                        @Override
+                                        public void onError(Exception e) {
+                                            Logger.e("TomaActionHandler", "Error al actualizar tomasRealizadas (la toma ya está en Firestore)", e);
+                                        }
+                                    });
+                        }
                         // Verificar si el medicamento completó todas sus tomas del día
                         boolean completoTodasLasTomas = tomaTrackingService.completoTodasLasTomasDelDia(medicamento.getId());
                         

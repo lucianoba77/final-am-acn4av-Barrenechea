@@ -33,7 +33,7 @@
     <string name="nav_home">Inicio</string>
     <string name="nav_new_medicine">Nueva\nMedicina</string>
     <string name="nav_medicine_cabinet">Botiquín</string>
-    <string name="nav_history">Historial</string>
+    <string name="nav_history">Adhesión</string>
     <string name="nav_settings">Ajustes</string>
 
     <!-- Medicine Item -->
@@ -124,6 +124,17 @@
     <string name="hint_time_example">08:00</string>
     <string name="hint_stock_example">Ej: 30</string>
     <string name="hint_treatment_days_example">-1 para crónico</string>
+    <string name="programacion_personalizada_title">Programación personalizada</string>
+    <string name="programacion_personalizada_use">Usar programación por día de la semana</string>
+    <string name="programacion_agregar_horario">Agregar horario</string>
+    <string name="programacion_horario_duplicado">Este horario ya está asignado para este día</string>
+    <string name="day_domingo">Domingo</string>
+    <string name="day_lunes">Lunes</string>
+    <string name="day_martes">Martes</string>
+    <string name="day_miercoles">Miércoles</string>
+    <string name="day_jueves">Jueves</string>
+    <string name="day_viernes">Viernes</string>
+    <string name="day_sabado">Sábado</string>
 
     <!-- Detalles de Medicamento -->
     <string name="medicine_details_title">Detalles del Medicamento</string>
@@ -146,7 +157,7 @@
     <string name="take_status_upcoming">Próxima</string>
 
     <!-- Historial -->
-    <string name="historial_title">Historial</string>
+    <string name="historial_title">Adhesión</string>
     <string name="total_medicines">Total medicamentos</string>
     <string name="active_medicines">Activos</string>
     <string name="completed_medicines">Completados</string>
@@ -155,7 +166,14 @@
     <string name="fulfilled">Cumplido</string>
     <string name="missed">Perdido</string>
     <string name="statistics_title">Estadísticas Generales</string>
-    <string name="loading_statistics">Cargando estadísticas...</string>
+    <string name="loading_statistics">Cargando estadísticas…</string>
+    <string name="adhesion_stat_con_seguimiento">Con seguimiento: %d</string>
+    <string name="adhesion_stat_activos_vigentes">Activos vigentes: %d</string>
+    <string name="adhesion_stat_no_vigentes">No vigentes: %d</string>
+    <string name="adhesion_por_medicamento_total">Adherencia por medicamento (Total)</string>
+    <string name="adhesion_badge_cronico">Crónico</string>
+    <string name="adhesion_total_tomas">Total: %1$d/%2$d tomas (%3$d días)</string>
+    <string name="adhesion_mensual_semanal">Mensual: %1$d%% (%2$d/%3$d) | Semanal: %4$d%% (%5$d/%6$d)</string>
     <string name="adherence_chart_title">Adherencia por Medicamento</string>
     <string name="adherence_plan_title">Plan de Adherencia Personalizada</string>
     <string name="adherence_plan_hint">Selecciona un medicamento con tomas programadas</string>

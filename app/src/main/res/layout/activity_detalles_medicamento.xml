@@ -38,7 +38,11 @@
             android:textColor="@color/white"
             android:textStyle="bold"
             android:gravity="center"
-            android:paddingVertical="8dp" />
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingVertical="8dp"
+            android:paddingStart="@dimen/padding_small"
+            android:paddingEnd="@dimen/padding_small" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnEditar"
@@ -96,7 +100,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="match_parent"
                                 android:scaleType="fitCenter"
-                            android:src="@android:drawable/ic_menu_info_details"
+                            android:src="@drawable/ic_medicamento"
                                 android:contentDescription="@string/medicine_icon"
                                 android:tint="@color/primary" />
                         </FrameLayout>
@@ -123,7 +127,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="Comprimidos"
                                 android:textSize="@dimen/text_size_medium"
-                                android:textColor="@android:color/darker_gray" />
+                                android:textColor="@color/secondary_text" />
 
                         </LinearLayout>
 

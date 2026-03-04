@@ -73,18 +73,22 @@ functions.getHttpsCallable("refrescarGoogleCalendarToken")
 
 ## Configuración
 
-### Variables de Entorno Requeridas
+### Variables de entorno (recomendado)
 
-Las funciones requieren que se configuren las credenciales de Google OAuth:
+Las funciones usan variables de entorno en lugar de `firebase functions:config` (deprecado).
 
-```bash
-firebase functions:config:set google.client_id="TU_CLIENT_ID"
-firebase functions:config:set google.client_secret="TU_CLIENT_SECRET"
-```
+1. En el directorio `functions/`, crea un archivo `.env` (no se sube al repo).
+2. Copia la plantilla y rellena los valores:
+   ```bash
+   cp .env.example .env
+   ```
+3. Edita `.env` y define:
+   - `GOOGLE_CLIENT_ID`: mismo Web Client ID que en la app Android (`default_web_client_id`).
+   - `GOOGLE_CLIENT_SECRET`: client secret del mismo cliente OAuth (Google Cloud Console > Credenciales).
 
-**Importante:**
-- El `client_id` debe ser el mismo Web Client ID que se usa en la app Android (`default_web_client_id`)
-- El `client_secret` solo debe estar en Firebase Functions, nunca en la app móvil
+Al desplegar con `firebase deploy --only functions`, la CLI lee `.env` e inyecta estas variables en las funciones.
+
+**Importante:** El `client_secret` solo debe estar en el backend (`.env`), nunca en la app móvil.
 
 ## Instalación
 
@@ -130,10 +134,7 @@ googleTokens/{userId} {
 ## Troubleshooting
 
 ### Error: "Client ID o Client Secret no configurados"
-Verifica la configuración:
-```bash
-firebase functions:config:get
-```
+Asegúrate de tener un archivo `functions/.env` con `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` y vuelve a desplegar.
 
 ### Error: "El usuario debe estar autenticado"
 Asegúrate de que el usuario haya iniciado sesión en Firebase Auth antes de llamar a las funciones.

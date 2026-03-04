@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="@dimen/margin_small"
+    android:layout_marginEnd="@dimen/margin_small"
+    android:layout_marginTop="@dimen/margin_small"
+    android:layout_marginBottom="@dimen/margin_small"
+    app:cardCornerRadius="@dimen/card_corner_radius"
+    app:cardElevation="@dimen/card_elevation"
+    app:strokeWidth="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/padding_medium">
+
+        <!-- Nombre y badge Crónico -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvNombreMedicamento"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="@dimen/text_size_large"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tvBadgeCronico"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/adhesion_badge_cronico"
+                android:textSize="@dimen/text_size_small"
+                android:textColor="@color/white"
+                android:background="@color/primary"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Porcentaje total con color de estado -->
+        <TextView
+            android:id="@+id/tvPorcentaje"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_size_xlarge"
+            android:textStyle="bold"
+            android:layout_marginTop="@dimen/margin_small" />
+
+        <!-- Barra de progreso -->
+        <ProgressBar
+            android:id="@+id/progressAdherencia"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/progress_bar_height"
+            android:max="100"
+            android:progress="0"
+            android:layout_marginTop="@dimen/margin_tiny" />
+
+        <!-- Total: X/Y tomas (Z días) -->
+        <TextView
+            android:id="@+id/tvTotalTomas"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_size_medium"
+            android:textColor="@color/secondary_text"
+            android:layout_marginTop="@dimen/margin_small" />
+
+        <!-- Mensual: X% (a/b) | Semanal: X% (a/b) -->
+        <TextView
+            android:id="@+id/tvMensualSemanal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_size_small"
+            android:textColor="@color/secondary_text"
+            android:layout_marginTop="@dimen/margin_tiny" />
+
+        <!-- Mensaje de estado -->
+        <TextView
+            android:id="@+id/tvMensajeEstado"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_size_medium"
+            android:textStyle="italic"
+            android:layout_marginTop="@dimen/margin_small" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

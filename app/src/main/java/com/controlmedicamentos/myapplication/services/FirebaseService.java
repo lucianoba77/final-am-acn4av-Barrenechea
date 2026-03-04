@@ -24,6 +24,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -475,6 +476,84 @@ public class FirebaseService {
                     }
                 }
             });
+    }
+
+    /**
+     * Añade una toma realizada al array tomasRealizadas del medicamento.
+     * Permite que la versión web vea las tomas marcadas desde Android (mismo formato que la web).
+     *
+     * @param medicamentoId ID del medicamento.
+     * @param userId        ID del usuario.
+     * @param fecha         Fecha en formato yyyy-MM-dd.
+     * @param hora          Hora en formato HH:mm.
+     * @param callback      Callback para el resultado (puede ser null).
+     */
+    public void appendTomaRealizadaAlMedicamento(String medicamentoId, String userId, String fecha, String hora, FirestoreCallback callback) {
+        if (medicamentoId == null || medicamentoId.isEmpty() || userId == null || fecha == null || hora == null) {
+            if (callback != null) {
+                callback.onError(new Exception("Parámetros inválidos para appendTomaRealizadaAlMedicamento"));
+            }
+            return;
+        }
+        db.collection(COLLECTION_MEDICAMENTOS)
+                .document(medicamentoId)
+                .get()
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful() || task.getResult() == null || !task.getResult().exists()) {
+                        if (callback != null) {
+                            callback.onError(task.getException() != null ? task.getException() : new Exception("Medicamento no encontrado"));
+                        }
+                        return;
+                    }
+                    DocumentSnapshot doc = task.getResult();
+                    Map<String, Object> data = doc.getData();
+                    if (data == null) {
+                        if (callback != null) {
+                            callback.onError(new Exception("Datos del medicamento no disponibles"));
+                        }
+                        return;
+                    }
+                    List<Map<String, Object>> tomasRealizadas = new ArrayList<>();
+                    Object tomasObj = data.get("tomasRealizadas");
+                    if (tomasObj instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Object> list = (List<Object>) tomasObj;
+                        for (Object o : list) {
+                            if (o instanceof Map) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> m = (Map<String, Object>) o;
+                                tomasRealizadas.add(new HashMap<>(m));
+                            }
+                        }
+                    }
+                    String timestamp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date());
+                    Map<String, Object> nuevaToma = new HashMap<>();
+                    nuevaToma.put("fecha", fecha);
+                    nuevaToma.put("hora", hora);
+                    nuevaToma.put("tomada", true);
+                    nuevaToma.put("timestamp", timestamp);
+                    tomasRealizadas.add(nuevaToma);
+
+                    Map<String, Object> update = new HashMap<>();
+                    update.put("tomasRealizadas", tomasRealizadas);
+                    update.put("fechaActualizacion", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
+
+                    db.collection(COLLECTION_MEDICAMENTOS)
+                            .document(medicamentoId)
+                            .update(update)
+                            .addOnSuccessListener(aVoid -> {
+                                Logger.d(TAG, "Toma añadida a tomasRealizadas del medicamento " + medicamentoId);
+                                if (callback != null) {
+                                    callback.onSuccess(null);
+                                }
+                            })
+                            .addOnFailureListener(e -> {
+                                Logger.e(TAG, "Error al actualizar tomasRealizadas del medicamento", e);
+                                if (callback != null) {
+                                    callback.onError(e);
+                                }
+                            });
+                });
     }
 
     // ==================== TOMAS ====================
@@ -1051,6 +1130,28 @@ public class FirebaseService {
             map.put("horariosTomas", medicamento.getHorariosTomas());
         }
         
+        // Programación personalizada por día (0–6). Escribir y mantener horariosTomas/primeraToma para la web.
+        Map<Integer, List<String>> programacion = medicamento.getProgramacionPersonalizada();
+        if (programacion != null && !programacion.isEmpty()) {
+            Map<String, Object> programacionFirestore = new HashMap<>();
+            List<String> todosHorarios = new ArrayList<>();
+            for (int d = 0; d <= 6; d++) {
+                List<String> list = programacion.get(d);
+                programacionFirestore.put(String.valueOf(d), list != null ? list : new ArrayList<>());
+                if (list != null) todosHorarios.addAll(list);
+            }
+            map.put("programacionPersonalizada", programacionFirestore);
+            map.put("usarProgramacionPersonalizada", true);
+            if (!todosHorarios.isEmpty()) {
+                Collections.sort(todosHorarios, String::compareTo);
+                map.put("horariosTomas", todosHorarios);
+                map.put("primeraToma", todosHorarios.get(0));
+                map.put("horarioPrimeraToma", todosHorarios.get(0));
+            }
+        } else {
+            map.put("usarProgramacionPersonalizada", false);
+        }
+        
         // Campos adicionales para compatibilidad con React
         map.put("tomasRealizadas", new ArrayList<>()); // Lista vacía por defecto
         map.put("eventoIdsGoogleCalendar", new ArrayList<>()); // Lista vacía por defecto
@@ -1203,6 +1304,48 @@ public class FirebaseService {
         
         if (document.get("horariosTomas") != null) {
             medicamento.setHorariosTomas((List<String>) document.get("horariosTomas"));
+            // Ordenar horarios para alinear con la web: "primero en el día" primero (HH:mm orden cronológico)
+            if (medicamento.getHorariosTomas() != null && !medicamento.getHorariosTomas().isEmpty()) {
+                Collections.sort(medicamento.getHorariosTomas(), String::compareTo);
+            }
+        }
+        
+        // Programación personalizada por día (0=Domingo ... 6=Sábado). Paridad con web.
+        Object programacionObj = document.get("programacionPersonalizada");
+        if (programacionObj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> raw = (Map<String, Object>) programacionObj;
+            Map<Integer, List<String>> programacion = new HashMap<>();
+            java.util.regex.Pattern horaPattern = java.util.regex.Pattern.compile("^([0-1][0-9]|2[0-3]):[0-5][0-9]$");
+            for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                try {
+                    int diaKey = Integer.parseInt(entry.getKey());
+                    if (diaKey < 0 || diaKey > 6) continue;
+                    Object val = entry.getValue();
+                    if (val instanceof List) {
+                        List<String> horariosDia = new ArrayList<>();
+                        for (Object o : (List<?>) val) {
+                            if (o != null) {
+                                String s = String.valueOf(o).trim();
+                                if (horaPattern.matcher(s).matches()) {
+                                    horariosDia.add(s);
+                                }
+                            }
+                        }
+                        if (!horariosDia.isEmpty()) {
+                            Collections.sort(horariosDia, String::compareTo);
+                            programacion.put(diaKey, horariosDia);
+                        }
+                    }
+                } catch (NumberFormatException ignored) { }
+            }
+            if (!programacion.isEmpty()) {
+                medicamento.setProgramacionPersonalizada(programacion);
+                medicamento.setUsarProgramacionPersonalizada(true);
+            }
+        }
+        if (document.get("usarProgramacionPersonalizada") != null && document.getBoolean("usarProgramacionPersonalizada") != null) {
+            medicamento.setUsarProgramacionPersonalizada(document.getBoolean("usarProgramacionPersonalizada"));
         }
         
         // Leer campos adicionales para compatibilidad con React

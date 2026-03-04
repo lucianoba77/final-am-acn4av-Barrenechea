@@ -7,7 +7,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { google } = require('googleapis');
 
-// Inicializar Firebase Admin si no está inicializado
+// Inicializar Firebase Admin si no est? inicializado
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -17,11 +17,11 @@ const COLECCION_TOKENS = 'googleTokens';
 
 /**
  * Intercambia un auth_code por access_token y refresh_token
- * Función callable desde la app Android
+ * Funci?n callable desde la app Android
  */
 exports.intercambiarGoogleCalendarToken = functions.https.onCall(async (data, context) => {
   try {
-    // Verificar autenticación
+    // Verificar autenticaci?n
     if (!context.auth) {
       throw new functions.https.HttpsError(
         'unauthenticated',
@@ -39,15 +39,14 @@ exports.intercambiarGoogleCalendarToken = functions.https.onCall(async (data, co
       );
     }
 
-    // Obtener client_id y client_secret desde la configuración de Firebase Functions
-    const config = functions.config();
-    const clientId = config.google?.client_id;
-    const clientSecret = config.google?.client_secret;
+    // Obtener client_id y client_secret desde variables de entorno (.env)
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
       throw new functions.https.HttpsError(
         'failed-precondition',
-        'Client ID o Client Secret no configurados en Firebase Functions'
+        'Client ID o Client Secret no configurados (variables GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)'
       );
     }
 
@@ -86,12 +85,12 @@ exports.intercambiarGoogleCalendarToken = functions.https.onCall(async (data, co
     // Guardar token en Firestore
     await db.collection(COLECCION_TOKENS).doc(userId).set(tokenData, { merge: true });
 
-    // Retornar confirmación de éxito
-    // El token ya está guardado en Firestore con refresh_token incluido
+    // Retornar confirmaci?n de ?xito
+    // El token ya est? guardado en Firestore con refresh_token incluido
     return {
       success: true,
       message: 'Token guardado exitosamente en Firestore',
-      access_token: tokenData.access_token, // Solo para confirmación, ya está en Firestore
+      access_token: tokenData.access_token, // Solo para confirmaci?n, ya est? en Firestore
       expires_in: tokenData.expires_in,
       fechaObtencion: tokenData.fechaObtencion,
     };
@@ -111,11 +110,11 @@ exports.intercambiarGoogleCalendarToken = functions.https.onCall(async (data, co
 
 /**
  * Renueva el access_token usando el refresh_token
- * Función callable desde la app Android
+ * Funci?n callable desde la app Android
  */
 exports.refrescarGoogleCalendarToken = functions.https.onCall(async (data, context) => {
   try {
-    // Verificar autenticación
+    // Verificar autenticaci?n
     if (!context.auth) {
       throw new functions.https.HttpsError(
         'unauthenticated',
@@ -133,20 +132,19 @@ exports.refrescarGoogleCalendarToken = functions.https.onCall(async (data, conte
       );
     }
 
-    // Obtener client_id y client_secret desde la configuración
-    const config = functions.config();
-    const clientId = config.google?.client_id;
-    const clientSecret = config.google?.client_secret;
+    // Obtener client_id y client_secret desde variables de entorno (.env)
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
       throw new functions.https.HttpsError(
         'failed-precondition',
-        'Client ID o Client Secret no configurados en Firebase Functions'
+        'Client ID o Client Secret no configurados (variables GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)'
       );
     }
 
     // Renovar token usando Google OAuth2
-    // Para renovación, usamos el mismo redirect_uri que en el intercambio inicial
+    // Para renovaci?n, usamos el mismo redirect_uri que en el intercambio inicial
     const redirectUri = 'https://mimedicinaapp.firebaseapp.com/googlecalendar/callback';
     const oauth2Client = new google.auth.OAuth2(
       clientId,

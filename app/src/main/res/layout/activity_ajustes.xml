@@ -29,6 +29,8 @@
             android:textColor="@color/white"
             android:textStyle="bold"
             android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
             android:paddingVertical="8dp" />
 
     </LinearLayout>
@@ -360,7 +362,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/google_calendar_info_not_connected"
                     android:textSize="@dimen/text_size_small"
-                    android:textColor="@android:color/darker_gray"
+                    android:textColor="@color/secondary_text"
                     android:layout_marginBottom="@dimen/margin_medium" />
 
                 <com.google.android.material.button.MaterialButton

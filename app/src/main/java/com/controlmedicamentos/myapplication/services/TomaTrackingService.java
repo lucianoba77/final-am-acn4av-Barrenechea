@@ -66,7 +66,7 @@ public class TomaTrackingService {
             // Si las tomas fueron eliminadas, continuar con la inicialización
         }
         
-        List<String> horarios = medicamento.getHorariosTomas();
+        List<String> horarios = medicamento.getHorariosTomasHoy();
         if (horarios == null || horarios.isEmpty()) {
             Log.w(TAG, "inicializarTomasDia: horarios vacíos para medicamento " + medicamentoId + 
                   ", tomasDiarias=" + medicamento.getTomasDiarias() + 

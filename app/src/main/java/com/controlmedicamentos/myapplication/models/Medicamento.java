@@ -5,8 +5,10 @@ import com.controlmedicamentos.myapplication.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 public class Medicamento {
     private String id;
@@ -31,6 +33,10 @@ public class Medicamento {
     private int diasEstimadosDuracion; // días estimados de duración
     private int diasRestantesDuracion; // días restantes de duración
     private boolean pausado; // si está pausado (tratamiento completado pero no eliminado)
+
+    /** Programación por día de la semana (0=Domingo, 1=Lunes, ..., 6=Sábado). Paridad con web. */
+    private Map<Integer, List<String>> programacionPersonalizada;
+    private boolean usarProgramacionPersonalizada;
 
     // Enum para tipos de stock
     public enum TipoStock {
@@ -287,6 +293,75 @@ public class Medicamento {
 
     public void setHorariosTomas(List<String> horariosTomas) {
         this.horariosTomas = horariosTomas;
+    }
+
+    public Map<Integer, List<String>> getProgramacionPersonalizada() {
+        return programacionPersonalizada;
+    }
+
+    public void setProgramacionPersonalizada(Map<Integer, List<String>> programacionPersonalizada) {
+        this.programacionPersonalizada = programacionPersonalizada;
+    }
+
+    public boolean isUsarProgramacionPersonalizada() {
+        return usarProgramacionPersonalizada;
+    }
+
+    public void setUsarProgramacionPersonalizada(boolean usarProgramacionPersonalizada) {
+        this.usarProgramacionPersonalizada = usarProgramacionPersonalizada;
+    }
+
+    /**
+     * Índice del día de la semana para programación personalizada (0=Domingo, ..., 6=Sábado).
+     * Equivalente a Calendar.DAY_OF_WEEK - 1.
+     */
+    private static int getDiaSemanaIndex0a6() {
+        return Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - 1;
+    }
+
+    /**
+     * Devuelve los horarios de tomas para el día actual.
+     * Si usa programación personalizada, devuelve los horarios del día de la semana actual (ordenados).
+     * Si no, devuelve horariosTomas (ya ordenados al cargar).
+     */
+    public List<String> getHorariosTomasHoy() {
+        if (usarProgramacionPersonalizada && programacionPersonalizada != null && !programacionPersonalizada.isEmpty()) {
+            int diaIndex = getDiaSemanaIndex0a6();
+            List<String> horarios = programacionPersonalizada.get(diaIndex);
+            if (horarios == null || horarios.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<String> copia = new ArrayList<>(horarios);
+            Collections.sort(copia, String::compareTo);
+            return copia;
+        }
+        if (horariosTomas == null || horariosTomas.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return horariosTomas;
+    }
+
+    /**
+     * Devuelve los horarios de tomas para un día de la semana dado (0=Domingo, ..., 6=Sábado).
+     * Usado por AlarmScheduler para programar por día.
+     */
+    public List<String> getHorariosParaDiaSemana(int diaSemana0a6) {
+        if (diaSemana0a6 < 0 || diaSemana0a6 > 6) {
+            return horariosTomas != null ? new ArrayList<>(horariosTomas) : new ArrayList<>();
+        }
+        if (usarProgramacionPersonalizada && programacionPersonalizada != null && !programacionPersonalizada.isEmpty()) {
+            List<String> horarios = programacionPersonalizada.get(diaSemana0a6);
+            if (horarios == null || horarios.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<String> copia = new ArrayList<>(horarios);
+            Collections.sort(copia, String::compareTo);
+            return copia;
+        }
+        if (horariosTomas == null || horariosTomas.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(horariosTomas);
     }
 
     // Método para asignar icono según presentación

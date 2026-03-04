@@ -209,7 +209,7 @@ public class DetallesMedicamentoActivity extends AppCompatActivity {
         }
         
         // Horarios
-        List<String> horarios = medicamento.getHorariosTomas();
+        List<String> horarios = medicamento.getHorariosTomasHoy();
         if (horarios != null && !horarios.isEmpty()) {
             String horariosStr = String.join(", ", horarios);
             tvHorarios.setText(getString(R.string.schedules_label, horariosStr));

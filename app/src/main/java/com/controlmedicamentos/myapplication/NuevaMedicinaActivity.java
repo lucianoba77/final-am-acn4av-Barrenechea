@@ -7,9 +7,14 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -33,7 +38,10 @@ import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
 import com.controlmedicamentos.myapplication.utils.Logger;
 import com.controlmedicamentos.myapplication.utils.NavigationHelper;
 import com.controlmedicamentos.myapplication.utils.ErrorHandler;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +66,11 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     private GoogleCalendarService googleCalendarService;
     private Medicamento medicamentoEditar = null; // Medicamento que se está editando (null si es creación)
     private boolean esEdicion = false;
+
+    private CheckBox checkUsarProgramacionPersonalizada;
+    private LinearLayout programacionDiasContainer;
+    /** Horarios por día de la semana (0=Domingo .. 6=Sábado). Se rellena al marcar "programación personalizada". */
+    private final List<List<String>> horariosPorDia = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -135,6 +148,12 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         btnNavBotiquin = findViewById(R.id.btnNavBotiquin);
         btnNavHistorial = findViewById(R.id.btnNavHistorial);
         btnNavAjustes = findViewById(R.id.btnNavAjustes);
+
+        checkUsarProgramacionPersonalizada = findViewById(R.id.checkUsarProgramacionPersonalizada);
+        programacionDiasContainer = findViewById(R.id.programacionDiasContainer);
+        for (int i = 0; i < 7; i++) {
+            horariosPorDia.add(new ArrayList<>());
+        }
     }
 
     private void configurarListeners() {
@@ -152,12 +171,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
         });
 
-        btnSeleccionarColor.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mostrarSelectorColor();
-            }
-        });
+        // Color asignado automáticamente por índice; no se muestra selector
 
         btnSeleccionarHora.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -172,6 +186,82 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 mostrarSelectorFecha();
             }
         });
+
+        checkUsarProgramacionPersonalizada.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            programacionDiasContainer.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+            if (isChecked && programacionDiasContainer.getChildCount() == 0) {
+                construirFilasProgramacion();
+            }
+        });
+    }
+
+    private static final int[] IDS_NOMBRES_DIA = {
+        R.string.day_domingo, R.string.day_lunes, R.string.day_martes, R.string.day_miercoles,
+        R.string.day_jueves, R.string.day_viernes, R.string.day_sabado
+    };
+
+    private void construirFilasProgramacion() {
+        programacionDiasContainer.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
+        for (int dia = 0; dia < 7; dia++) {
+            View row = inflater.inflate(R.layout.item_programacion_dia, programacionDiasContainer, false);
+            TextView tvDia = row.findViewById(R.id.tvDiaNombre);
+            tvDia.setText(IDS_NOMBRES_DIA[dia]);
+            LinearLayout containerHorarios = row.findViewById(R.id.containerHorariosDia);
+            MaterialButton btnAgregar = row.findViewById(R.id.btnAgregarHorario);
+            final int diaIndex = dia;
+            btnAgregar.setOnClickListener(v -> mostrarTimePickerParaDia(diaIndex, containerHorarios));
+            row.setTag(diaIndex);
+            programacionDiasContainer.addView(row);
+            refrescarHorariosDia(diaIndex, containerHorarios);
+        }
+    }
+
+    private void mostrarTimePickerParaDia(int diaIndex, LinearLayout containerHorarios) {
+        String inicial = "08:00";
+        if (!horariosPorDia.get(diaIndex).isEmpty()) {
+            inicial = horariosPorDia.get(diaIndex).get(horariosPorDia.get(diaIndex).size() - 1);
+        }
+        String[] partes = inicial.split(":");
+        int hora = partes.length >= 2 ? Integer.parseInt(partes[0]) : 8;
+        int minuto = partes.length >= 2 ? Integer.parseInt(partes[1]) : 0;
+        TimePickerDialog dlg = new TimePickerDialog(this, (view, hourOfDay, minute) -> {
+            String h = String.format("%02d:%02d", hourOfDay, minute);
+            if (horariosPorDia.get(diaIndex).contains(h)) {
+                Toast.makeText(this, getString(R.string.programacion_horario_duplicado), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            horariosPorDia.get(diaIndex).add(h);
+            Collections.sort(horariosPorDia.get(diaIndex), String::compareTo);
+            refrescarHorariosDia(diaIndex, containerHorarios);
+        }, hora, minuto, true);
+        dlg.show();
+    }
+
+    private void refrescarHorariosDia(int diaIndex, LinearLayout containerHorarios) {
+        containerHorarios.removeAllViews();
+        List<String> list = horariosPorDia.get(diaIndex);
+        for (String horario : list) {
+            LinearLayout fila = new LinearLayout(this);
+            fila.setOrientation(LinearLayout.HORIZONTAL);
+            fila.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams paramsText = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            TextView tv = new TextView(this);
+            tv.setText(horario);
+            tv.setTextSize(16);
+            tv.setLayoutParams(paramsText);
+            MaterialButton quitar = new MaterialButton(this);
+            quitar.setText("✕");
+            quitar.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            String horarioToRemove = horario;
+            quitar.setOnClickListener(v -> {
+                list.remove(horarioToRemove);
+                refrescarHorariosDia(diaIndex, containerHorarios);
+            });
+            fila.addView(tv);
+            fila.addView(quitar);
+            containerHorarios.addView(fila);
+        }
     }
     
     private void configurarNavegacion() {
@@ -402,6 +492,25 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             btnSeleccionarHora.setEnabled(false);
         }
         
+        // Programación personalizada por día
+        if (medicamento.isUsarProgramacionPersonalizada() && medicamento.getProgramacionPersonalizada() != null) {
+            for (int d = 0; d < 7; d++) {
+                horariosPorDia.get(d).clear();
+                List<String> list = medicamento.getProgramacionPersonalizada().get(d);
+                if (list != null) horariosPorDia.get(d).addAll(list);
+            }
+            checkUsarProgramacionPersonalizada.setChecked(true);
+            programacionDiasContainer.setVisibility(View.VISIBLE);
+            if (programacionDiasContainer.getChildCount() == 0) {
+                construirFilasProgramacion();
+            } else {
+                for (int d = 0; d < 7; d++) {
+                    View row = programacionDiasContainer.getChildAt(d);
+                    refrescarHorariosDia(d, row.findViewById(R.id.containerHorariosDia));
+                }
+            }
+        }
+
         // Configurar color
         colorSeleccionadoHex = ColorUtils.intToHex(medicamento.getColor());
         actualizarBotonColor();
@@ -570,6 +679,33 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             medicamento.setFechaVencimiento(fechaVencimiento.getTime());
         }
 
+        // Programación personalizada: si está activa y hay al menos un día con horarios
+        if (checkUsarProgramacionPersonalizada != null && checkUsarProgramacionPersonalizada.isChecked()) {
+            Map<Integer, List<String>> programacion = new HashMap<>();
+            List<String> todosHorarios = new ArrayList<>();
+            int maxTomasDia = 0;
+            for (int d = 0; d < 7; d++) {
+                List<String> list = horariosPorDia.get(d) != null ? new ArrayList<>(horariosPorDia.get(d)) : new ArrayList<>();
+                if (!list.isEmpty()) {
+                    Collections.sort(list, String::compareTo);
+                    programacion.put(d, list);
+                    todosHorarios.addAll(list);
+                    if (list.size() > maxTomasDia) maxTomasDia = list.size();
+                }
+            }
+            if (!programacion.isEmpty() && !todosHorarios.isEmpty()) {
+                medicamento.setProgramacionPersonalizada(programacion);
+                medicamento.setUsarProgramacionPersonalizada(true);
+                Collections.sort(todosHorarios, String::compareTo);
+                medicamento.setHorariosTomas(todosHorarios);
+                medicamento.setHorarioPrimeraToma(todosHorarios.get(0));
+                medicamento.setTomasDiarias(maxTomasDia);
+            }
+        } else {
+            medicamento.setUsarProgramacionPersonalizada(false);
+            medicamento.setProgramacionPersonalizada(null);
+        }
+
         return medicamento;
     }
 
@@ -601,26 +737,10 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
      * Actualiza el botón de color con el color seleccionado
      */
     private void actualizarBotonColor() {
+        if (btnSeleccionarColor == null) return;
         int colorInt = ColorUtils.hexToInt(colorSeleccionadoHex);
         btnSeleccionarColor.setBackgroundColor(colorInt);
         btnSeleccionarColor.setText("Color asignado");
-    }
-
-    private void mostrarSelectorColor() {
-        // Los colores se asignan automáticamente, pero permitimos selección manual opcional
-        String[] coloresNombres = {"Rosa pastel", "Azul pastel", "Verde pastel", "Amarillo pastel", "Lavanda pastel"};
-        String[] coloresHex = ColorUtils.COLORES_HEX;
-
-        new AlertDialog.Builder(this)
-                .setTitle("Seleccionar Color (Opcional)")
-                .setItems(coloresNombres, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        colorSeleccionadoHex = coloresHex[which];
-                        actualizarBotonColor();
-                    }
-                })
-                .show();
     }
 
     private void mostrarSelectorHora() {

@@ -186,6 +186,7 @@ public class GoogleCalendarService {
      * 
      * @deprecated Este método no se usa actualmente. Se mantiene para compatibilidad futura.
      */
+    @Deprecated
     @SuppressWarnings("unused")
     public void actualizarEventoToma(String accessToken, String eventoId, Medicamento medicamento, 
                                      String fecha, String hora, CalendarCallback callback) {
@@ -1082,6 +1083,7 @@ public class GoogleCalendarService {
      * 
      * @deprecated Este método no se usa actualmente. El retry se maneja automáticamente en el flujo principal.
      */
+    @Deprecated
     @SuppressWarnings("unused")
     private void reintentarCrearEventoRecurrente(String accessToken, Medicamento medicamento, 
                                                  String horaToma, int attemptNumber, CalendarCallback callback) {

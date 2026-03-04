@@ -375,6 +375,42 @@ app/src/main/java/com/controlmedicamentos/myapplication/
 - **Conexión a Internet**: Requerida para autenticación y sincronización
 - **Google Play Services**: Requerido para Google Sign-In y Google Calendar
 
+## Configuración para compilar
+
+El proyecto usa Firebase; el archivo **`google-services.json`** no está en el repositorio (contiene datos del proyecto). Para poder compilar:
+
+1. Entra en [Firebase Console](https://console.firebase.google.com/) y selecciona el proyecto (p. ej. **mimedicinaapp**).
+2. Ve a **Configuración del proyecto** (icono de engranaje) → **Tus apps**.
+3. Si ya tienes una app Android registrada, pulsa **Descargar google-services.json**. Si no, añade una app Android con el package `com.controlmedicamentos.myapplication` y luego descarga el archivo.
+4. Coloca el archivo descargado en: **`app/google-services.json`** (junto a `app/build.gradle`).
+
+Sin este archivo, la tarea `:app:processDebugGoogleServices` fallará.
+
+### "Desarrollador error" al iniciar sesión con Google
+
+Si aparece **"Desarrollador error. Verifica la configuración de Google Sign-In"**, casi siempre es porque la **huella SHA-1** del keystore con el que firmas la app no está registrada en Firebase.
+
+**Pasos:**
+
+1. **Obtener la SHA-1 (y SHA-256) del keystore de debug**  
+   En PowerShell o CMD (en tu PC):
+   ```bash
+   keytool -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android -keypass android
+   ```
+   Copia las líneas **SHA1:** y **SHA-256:**.
+
+2. **Registrar las huellas en Firebase**  
+   - [Firebase Console](https://console.firebase.google.com/) → tu proyecto (p. ej. **mimedicinaapp**).  
+   - **Configuración del proyecto** (engranaje) → **Tus apps** → tu app Android (`com.controlmedicamentos.myapplication`).  
+   - En **Huellas digitales de certificado de firma**, pulsa **Añadir huella**, pega la SHA-1 y guarda. Repite para SHA-256 si quieres.
+
+3. **Descargar de nuevo `google-services.json`**  
+   En la misma página de la app Android, descarga otra vez **google-services.json** y reemplaza el archivo en **`app/google-services.json`**.
+
+4. **Volver a compilar y probar**  
+   Sincroniza el proyecto y ejecuta de nuevo; inicia sesión con Google en la app.
+
+Si usas un keystore de **release** (firmas para publicar), añade también la SHA-1/SHA-256 de ese keystore en Firebase.
 
 ## Notas de Desarrollo
 

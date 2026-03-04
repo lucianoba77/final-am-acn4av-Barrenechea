@@ -177,7 +177,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/or_divider"
                     android:textSize="@dimen/text_size_medium"
-                    android:textColor="@android:color/darker_gray"
+                    android:textColor="@color/secondary_text"
                     android:paddingStart="16dp"
                     android:paddingEnd="16dp" />
 
@@ -234,7 +234,7 @@
         android:layout_height="wrap_content"
         android:text="@string/login_help_text"
         android:textSize="@dimen/text_size_medium"
-        android:textColor="@android:color/darker_gray"
+        android:textColor="@color/secondary_text"
         android:layout_marginTop="@dimen/margin_large"
         android:gravity="center"
         android:lineSpacingExtra="4dp" />

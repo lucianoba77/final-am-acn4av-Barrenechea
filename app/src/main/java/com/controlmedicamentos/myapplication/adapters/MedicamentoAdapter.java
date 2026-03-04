@@ -171,12 +171,11 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
                 tomasProgramadas = trackingService.obtenerTomasMedicamento(medicamento.getId());
             }
 
-            // Crear barras según tomas diarias
-            int tomasDiarias = medicamento.getTomasDiarias();
-            List<String> horarios = medicamento.getHorariosTomas();
+            // Crear barras según tomas de hoy (programación personalizada o horarios fijos)
+            List<String> horarios = medicamento.getHorariosTomasHoy();
             boolean tieneTomasEnAlerta = false;
             
-            for (int i = 0; i < tomasDiarias && i < horarios.size(); i++) {
+            for (int i = 0; i < horarios.size(); i++) {
                 String horario = horarios.get(i);
                 ProgressBar barra = new ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal);
                 barra.setLayoutParams(new LinearLayout.LayoutParams(

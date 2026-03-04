@@ -28,6 +28,8 @@
             android:textColor="@color/white"
             android:textStyle="bold"
             android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
             android:paddingVertical="8dp" />
 
     </LinearLayout>

@@ -87,6 +87,13 @@ lint/reports/
 # Documentation files (except README.md)
 *.md
 !README.md
+# Manual, auditoría, mapa y parches: no subir al repositorio
+MANUAL_DESARROLLADOR.md
+AUDITORIA_ERRORHANDLER_STRINGS.md
+MAPA_VERSION_WEB.md
+PATCH_WEB_ESCRIBIR_TOMAS.md
+# Carpeta de la versión web (solo contexto/referencia en este workspace)
+MiMedicina/
 node_modules
 log2.logcat
 log3.logcat

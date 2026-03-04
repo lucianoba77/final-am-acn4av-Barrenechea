@@ -34,95 +34,85 @@ public class AlarmScheduler {
             return;
         }
         
-        // Solo programar alarmas para medicamentos activos con tomas diarias > 0
-        if (!medicamento.isActivo() || medicamento.isPausado() || 
-            medicamento.getTomasDiarias() <= 0 || 
-            medicamento.getHorarioPrimeraToma() == null || 
-            medicamento.getHorarioPrimeraToma().isEmpty()) {
-            Log.d(TAG, "Medicamento no requiere alarmas: " + medicamento.getNombre());
+        if (!medicamento.isActivo() || medicamento.isPausado()) {
+            Log.d(TAG, "Medicamento no activo o pausado: " + medicamento.getNombre());
+            return;
+        }
+        // Comprobar si hay algún horario en algún día (programación personalizada o fija)
+        boolean tieneAlgunHorario = false;
+        for (int d = 0; d <= 6; d++) {
+            if (!medicamento.getHorariosParaDiaSemana(d).isEmpty()) {
+                tieneAlgunHorario = true;
+                break;
+            }
+        }
+        if (!tieneAlgunHorario) {
+            Log.d(TAG, "Medicamento sin horarios en ningún día: " + medicamento.getNombre());
             return;
         }
         
-        // Cancelar alarmas existentes primero
         cancelarAlarmasMedicamento(medicamento);
         
-        List<String> horarios = medicamento.getHorariosTomas();
-        if (horarios == null || horarios.isEmpty()) {
-            Log.e(TAG, "No hay horarios para el medicamento: " + medicamento.getNombre());
-            return;
-        }
-        
         Calendar ahora = Calendar.getInstance();
+        final int DIAS_PROGRAMADOS = 7;
         
-        // Programar alarmas para cada horario
-        for (int i = 0; i < horarios.size(); i++) {
-            String horario = horarios.get(i);
+        for (int diaOffset = 0; diaOffset <= DIAS_PROGRAMADOS; diaOffset++) {
+            Calendar fecha = Calendar.getInstance();
+            fecha.add(Calendar.DAY_OF_YEAR, diaOffset);
+            int diaSemana = fecha.get(Calendar.DAY_OF_WEEK) - 1; // 0=Domingo .. 6=Sábado
+            List<String> horariosDia = medicamento.getHorariosParaDiaSemana(diaSemana);
+            if (horariosDia == null || horariosDia.isEmpty()) continue;
             
-            // Parsear horario (formato "HH:mm")
-            String[] partes = horario.split(":");
-            if (partes.length != 2) {
-                Log.e(TAG, "Formato de horario inválido: " + horario);
-                continue;
-            }
-            
-            try {
-                int hora = Integer.parseInt(partes[0]);
-                int minuto = Integer.parseInt(partes[1]);
-                
-                // Crear Calendar para la hora de la toma hoy
-                Calendar horarioToma = Calendar.getInstance();
-                horarioToma.set(Calendar.HOUR_OF_DAY, hora);
-                horarioToma.set(Calendar.MINUTE, minuto);
-                horarioToma.set(Calendar.SECOND, 0);
-                horarioToma.set(Calendar.MILLISECOND, 0);
-                
-                // Si la hora ya pasó hoy, programar para mañana
-                if (horarioToma.before(ahora)) {
-                    horarioToma.add(Calendar.DAY_OF_YEAR, 1);
+            for (int i = 0; i < horariosDia.size(); i++) {
+                String horario = horariosDia.get(i);
+                String[] partes = horario.split(":");
+                if (partes.length != 2) {
+                    Log.e(TAG, "Formato de horario inválido: " + horario);
+                    continue;
                 }
-                
-                // Programar alarma 10 minutos antes (alerta amarilla)
-                Calendar horarioAlertaAmarilla = (Calendar) horarioToma.clone();
-                horarioAlertaAmarilla.add(Calendar.MINUTE, -10);
-                
-                // Solo programar si la alerta amarilla no ha pasado
-                if (!horarioAlertaAmarilla.before(ahora)) {
-                    Intent intentAmarilla = AlarmReceiver.createIntent(
-                        context, medicamento.getId(), horario, AlarmReceiver.TIPO_ALERTA_AMARILLA);
-                    int requestCodeAmarilla = generarRequestCode(medicamento.getId(), i, 0, true);
-                    PendingIntent pendingIntentAmarilla = PendingIntent.getBroadcast(
-                        context,
-                        requestCodeAmarilla,
-                        intentAmarilla,
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                    );
+                try {
+                    int hora = Integer.parseInt(partes[0]);
+                    int minuto = Integer.parseInt(partes[1]);
+                    Calendar horarioToma = (Calendar) fecha.clone();
+                    horarioToma.set(Calendar.HOUR_OF_DAY, hora);
+                    horarioToma.set(Calendar.MINUTE, minuto);
+                    horarioToma.set(Calendar.SECOND, 0);
+                    horarioToma.set(Calendar.MILLISECOND, 0);
+                    if (diaOffset == 0 && horarioToma.before(ahora)) continue;
                     
-                    programarAlarma(horarioAlertaAmarilla.getTimeInMillis(), pendingIntentAmarilla);
-                    Log.d(TAG, "Alerta amarilla programada (10 min antes) para: " + 
-                          medicamento.getNombre() + " a las " + horario);
+                    Calendar horarioAlertaAmarilla = (Calendar) horarioToma.clone();
+                    horarioAlertaAmarilla.add(Calendar.MINUTE, -10);
+                    boolean programarAmarilla = (diaOffset > 0) || !horarioAlertaAmarilla.before(ahora);
+                    if (programarAmarilla) {
+                        Intent intentAmarilla = AlarmReceiver.createIntent(
+                            context, medicamento.getId(), horario, AlarmReceiver.TIPO_ALERTA_AMARILLA);
+                        int requestCodeAmarilla = generarRequestCode(medicamento.getId(), i, diaOffset, true);
+                        PendingIntent pendingIntentAmarilla = PendingIntent.getBroadcast(
+                            context, requestCodeAmarilla, intentAmarilla,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                        try {
+                            programarAlarma(horarioAlertaAmarilla.getTimeInMillis(), pendingIntentAmarilla);
+                        } catch (Exception e) {
+                            if (esLimiteAlarmasAlcanzado(e)) break;
+                            Log.e(TAG, "Error al programar alerta amarilla", e);
+                        }
+                    }
+                    
+                    Intent intentRoja = AlarmReceiver.createIntent(
+                        context, medicamento.getId(), horario, AlarmReceiver.TIPO_ALERTA_ROJA);
+                    int requestCodeRoja = generarRequestCode(medicamento.getId(), i, diaOffset, false);
+                    PendingIntent pendingIntentRoja = PendingIntent.getBroadcast(
+                        context, requestCodeRoja, intentRoja,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    try {
+                        programarAlarma(horarioToma.getTimeInMillis(), pendingIntentRoja);
+                    } catch (Exception e) {
+                        if (esLimiteAlarmasAlcanzado(e)) break;
+                        Log.e(TAG, "Error al programar alarma roja", e);
+                    }
+                } catch (NumberFormatException e) {
+                    Log.e(TAG, "Error al parsear horario: " + horario, e);
                 }
-                
-                // Programar alarma en el horario exacto (alerta roja)
-                Intent intentRoja = AlarmReceiver.createIntent(
-                    context, medicamento.getId(), horario, AlarmReceiver.TIPO_ALERTA_ROJA);
-                int requestCodeRoja = generarRequestCode(medicamento.getId(), i, 0, false);
-                PendingIntent pendingIntentRoja = PendingIntent.getBroadcast(
-                    context,
-                    requestCodeRoja,
-                    intentRoja,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                );
-                
-                programarAlarma(horarioToma.getTimeInMillis(), pendingIntentRoja);
-                
-                Log.d(TAG, "Alarma programada para: " + medicamento.getNombre() + 
-                      " a las " + horario + " (requestCode: " + requestCodeRoja + ")");
-                
-                // Programar alarmas recurrentes para los próximos días
-                programarAlarmasRecurrentes(medicamento, horario, i, horarioToma);
-                
-            } catch (NumberFormatException e) {
-                Log.e(TAG, "Error al parsear horario: " + horario, e);
             }
         }
     }
@@ -281,22 +271,26 @@ public class AlarmScheduler {
             return;
         }
         
-        List<String> horarios = medicamento.getHorariosTomas();
-        if (horarios == null) {
-            horarios = new java.util.ArrayList<>();
+        int maxHorarios = 0;
+        for (int d = 0; d <= 6; d++) {
+            int n = medicamento.getHorariosParaDiaSemana(d).size();
+            if (n > maxHorarios) maxHorarios = n;
         }
+        if (maxHorarios == 0 && medicamento.getHorariosTomas() != null) {
+            maxHorarios = medicamento.getHorariosTomas().size();
+        }
+        if (maxHorarios == 0) maxHorarios = 8;
         
-        // Cancelar alarmas para todos los horarios
-        // OPTIMIZADO: Solo cancelar las alarmas que podrían estar programadas (30 días + 1 para el día 0)
         final int MAX_DIAS_CANCELAR = 31;
+        List<String> horariosRef = medicamento.getHorariosTomas();
+        if (horariosRef == null) horariosRef = new java.util.ArrayList<>();
         
-        for (int i = 0; i < horarios.size(); i++) {
-            // Cancelar alarmas para los próximos días programados
+        for (int i = 0; i < maxHorarios; i++) {
+            String horarioRef = (i < horariosRef.size()) ? horariosRef.get(i) : "00:00";
             for (int dia = 0; dia <= MAX_DIAS_CANCELAR; dia++) {
-                // Cancelar alerta amarilla (10 min antes)
                 int requestCodeAmarilla = generarRequestCode(medicamento.getId(), i, dia, true);
                 Intent intentAmarilla = AlarmReceiver.createIntent(
-                    context, medicamento.getId(), horarios.get(i), AlarmReceiver.TIPO_ALERTA_AMARILLA);
+                    context, medicamento.getId(), horarioRef, AlarmReceiver.TIPO_ALERTA_AMARILLA);
                 PendingIntent pendingIntentAmarilla = PendingIntent.getBroadcast(
                     context,
                     requestCodeAmarilla,
@@ -306,10 +300,9 @@ public class AlarmScheduler {
                 alarmManager.cancel(pendingIntentAmarilla);
                 pendingIntentAmarilla.cancel();
                 
-                // Cancelar alerta roja (horario exacto)
                 int requestCodeRoja = generarRequestCode(medicamento.getId(), i, dia, false);
                 Intent intentRoja = AlarmReceiver.createIntent(
-                    context, medicamento.getId(), horarios.get(i), AlarmReceiver.TIPO_ALERTA_ROJA);
+                    context, medicamento.getId(), horarioRef, AlarmReceiver.TIPO_ALERTA_ROJA);
                 PendingIntent pendingIntentRoja = PendingIntent.getBroadcast(
                     context,
                     requestCodeRoja,

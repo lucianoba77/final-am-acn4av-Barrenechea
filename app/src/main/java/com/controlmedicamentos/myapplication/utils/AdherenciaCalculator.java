@@ -4,6 +4,7 @@ import com.controlmedicamentos.myapplication.models.AdherenciaIntervalo;
 import com.controlmedicamentos.myapplication.models.AdherenciaResumen;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.Toma;
+import com.controlmedicamentos.myapplication.utils.EstadoAdherencia;
 import java.text.DateFormatSymbols;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -61,8 +62,26 @@ public final class AdherenciaCalculator {
             tomasEsperadas,
             tomasRealizadas,
             porcentaje,
-            medicamento.getDiasTratamiento() == -1
+            medicamento.getDiasTratamiento() == -1,
+            diasSeguimiento
         );
+    }
+
+    /**
+     * Devuelve estado de adherencia según porcentaje (paridad con web).
+     * 90+ excelente, 70+ buena, 50+ regular, sino baja.
+     */
+    public static EstadoAdherencia obtenerEstadoAdherencia(float porcentaje) {
+        if (porcentaje >= 90f) {
+            return new EstadoAdherencia(EstadoAdherencia.COLOR_EXCELENTE, "Excelente adherencia");
+        }
+        if (porcentaje >= 70f) {
+            return new EstadoAdherencia(EstadoAdherencia.COLOR_BUENA, "Buena adherencia");
+        }
+        if (porcentaje >= 50f) {
+            return new EstadoAdherencia(EstadoAdherencia.COLOR_REGULAR, "Adherencia regular");
+        }
+        return new EstadoAdherencia(EstadoAdherencia.COLOR_BAJA, "Adherencia baja");
     }
 
     public static List<AdherenciaIntervalo> calcularAdherenciaSemanal(Medicamento medicamento, List<Toma> tomas) {
@@ -217,7 +236,7 @@ public final class AdherenciaCalculator {
     public static AdherenciaResumen calcularAdherenciaGeneralPaciente(
             List<Medicamento> medicamentos, List<Toma> todasLasTomas) {
         if (medicamentos == null || medicamentos.isEmpty()) {
-            return new AdherenciaResumen("", "General", 0, 0, 0f, false);
+            return new AdherenciaResumen("", "General", 0, 0, 0f, false, 0);
         }
 
         int totalTomasEsperadas = 0;
@@ -249,8 +268,8 @@ public final class AdherenciaCalculator {
         float porcentaje = totalTomasEsperadas == 0 ? 0f : 
             Math.min(100f, (totalTomasRealizadas * 100f) / (float) totalTomasEsperadas);
 
-        return new AdherenciaResumen("", "Adherencia General", 
-            totalTomasEsperadas, totalTomasRealizadas, porcentaje, false);
+        return new AdherenciaResumen("", "Adherencia General",
+            totalTomasEsperadas, totalTomasRealizadas, porcentaje, false, 0);
     }
 
     /**

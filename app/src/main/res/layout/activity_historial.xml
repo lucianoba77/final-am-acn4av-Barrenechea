@@ -37,7 +37,11 @@
             android:textColor="@color/white"
             android:textStyle="bold"
             android:gravity="center"
-            android:paddingVertical="8dp" />
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingVertical="8dp"
+            android:paddingStart="@dimen/padding_small"
+            android:paddingEnd="@dimen/padding_small" />
 
     </LinearLayout>
 
@@ -91,11 +95,30 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Historial Completo de Adherencia del Paciente -->
+        <!-- Adherencia por medicamento (Total) -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/adhesion_por_medicamento_total"
+            android:textSize="@dimen/text_size_large"
+            android:textColor="@color/black"
+            android:textStyle="bold"
+            android:layout_marginBottom="@dimen/margin_small" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvAdherenciaPorMedicamento"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            android:layout_marginBottom="@dimen/margin_medium" />
+
+        <!-- Historial Completo de Adherencia del Paciente (oculto: solo stats + lista) -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardHistorialCompleto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/margin_medium"
+            android:visibility="gone"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation">
 
@@ -157,11 +180,13 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Gráfico de Adherencia por Medicamento -->
+        <!-- Gráfico de Adherencia por Medicamento (oculto: solo stats + lista) -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardGraficoAdherencia"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/margin_medium"
+            android:visibility="gone"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation">
 
@@ -189,12 +214,13 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Plan de adherencia personalizada -->
+        <!-- Plan de adherencia personalizada (oculto: solo stats + lista) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardPlanAdherencia"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/margin_medium"
+            android:visibility="gone"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation">
 
@@ -291,11 +317,13 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Tratamientos Concluidos -->
+        <!-- Tratamientos Concluidos (oculto: solo stats + lista) -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardTratamientosConcluidos"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/margin_medium"
+            android:visibility="gone"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation">
 
@@ -324,12 +352,13 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Medicamentos Ocasionales Consumidos -->
+        <!-- Medicamentos Ocasionales Consumidos (oculto: solo stats + lista) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardMedicamentosOcasionales"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/margin_medium"
+            android:visibility="gone"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation">
 
@@ -360,7 +389,7 @@
                     android:layout_height="wrap_content"
                     android:text="No hay medicamentos ocasionales consumidos"
                     android:textSize="@dimen/text_size_medium"
-                    android:textColor="@android:color/darker_gray"
+                    android:textColor="@color/secondary_text"
                     android:gravity="center"
                     android:padding="@dimen/padding_medium"
                     android:visibility="gone" />

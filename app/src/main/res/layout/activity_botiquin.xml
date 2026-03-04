@@ -30,7 +30,11 @@
             android:textColor="@color/white"
             android:textStyle="bold"
             android:gravity="center"
-            android:paddingVertical="8dp" />
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingVertical="8dp"
+            android:paddingStart="@dimen/padding_small"
+            android:paddingEnd="@dimen/padding_small" />
 
     </LinearLayout>
 

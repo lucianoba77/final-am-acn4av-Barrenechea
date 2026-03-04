@@ -14,6 +14,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.controlmedicamentos.myapplication.adapters.AdherenciaAdapter;
 import com.controlmedicamentos.myapplication.adapters.HistorialAdapter;
 import com.controlmedicamentos.myapplication.models.AdherenciaIntervalo;
 import com.controlmedicamentos.myapplication.models.AdherenciaResumen;
@@ -22,6 +23,7 @@ import com.controlmedicamentos.myapplication.models.Toma;
 import com.controlmedicamentos.myapplication.services.AuthService;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.utils.AdherenciaCalculator;
+import com.controlmedicamentos.myapplication.utils.MedicamentoUtils;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.NavigationHelper;
 import com.github.mikephil.charting.charts.BarChart;
@@ -43,6 +45,7 @@ public class HistorialActivity extends AppCompatActivity {
     private BarChart chartAdherencia;
     private RecyclerView rvTratamientosConcluidos;
     private RecyclerView rvMedicamentosOcasionales;
+    private RecyclerView rvAdherenciaPorMedicamento;
     private TextView tvEstadisticasGenerales;
     private TextView tvEmptyOcasionales;
     private MaterialButton btnVolver;
@@ -50,9 +53,14 @@ public class HistorialActivity extends AppCompatActivity {
     private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     private HistorialAdapter adapter;
     private HistorialAdapter adapterOcasionales;
+    private AdherenciaAdapter adherenciaAdapter;
     private List<Medicamento> tratamientosConcluidos = new ArrayList<>();
     private List<Medicamento> medicamentosOcasionales = new ArrayList<>();
     private List<Medicamento> todosLosMedicamentos = new ArrayList<>();
+    /** Medicamentos con seguimiento (no ocasionales) para estadísticas y lista de adherencia. */
+    private List<Medicamento> medicamentosConSeguimiento = new ArrayList<>();
+    /** Activos y no vencidos; son los que se muestran en "Adherencia por medicamento (Total)". */
+    private List<Medicamento> medicamentosConAdherencia = new ArrayList<>();
     private List<Toma> tomasUsuario = new ArrayList<>();
     private AuthService authService;
     private FirebaseService firebaseService;
@@ -118,6 +126,7 @@ public class HistorialActivity extends AppCompatActivity {
         chartAdherencia = findViewById(R.id.chartAdherencia);
         rvTratamientosConcluidos = findViewById(R.id.rvTratamientosConcluidos);
         rvMedicamentosOcasionales = findViewById(R.id.rvMedicamentosOcasionales);
+        rvAdherenciaPorMedicamento = findViewById(R.id.rvAdherenciaPorMedicamento);
         tvEstadisticasGenerales = findViewById(R.id.tvEstadisticasGenerales);
         tvEmptyOcasionales = findViewById(R.id.tvEmptyOcasionales);
         btnVolver = findViewById(R.id.btnVolver);
@@ -183,6 +192,10 @@ public class HistorialActivity extends AppCompatActivity {
         adapterOcasionales = new HistorialAdapter(this, medicamentosOcasionales);
         rvMedicamentosOcasionales.setLayoutManager(new LinearLayoutManager(this));
         rvMedicamentosOcasionales.setAdapter(adapterOcasionales);
+
+        adherenciaAdapter = new AdherenciaAdapter(this, medicamentosConAdherencia, tomasUsuario);
+        rvAdherenciaPorMedicamento.setLayoutManager(new LinearLayoutManager(this));
+        rvAdherenciaPorMedicamento.setAdapter(adherenciaAdapter);
     }
 
     private void cargarDatos() {
@@ -238,29 +251,31 @@ public class HistorialActivity extends AppCompatActivity {
         if (todosLosMedicamentos.isEmpty()) {
             tvEstadisticasGenerales.setText("No hay medicamentos registrados");
             adapter.actualizarMedicamentos(new ArrayList<>());
+            medicamentosConSeguimiento.clear();
+            medicamentosConAdherencia.clear();
             return;
         }
 
-        int totalMedicamentos = todosLosMedicamentos.size();
-        int medicamentosActivos = 0;
-        int medicamentosPausados = 0;
-
-        for (Medicamento medicamento : todosLosMedicamentos) {
-            if (medicamento.isActivo() && !medicamento.isPausado()) {
-                medicamentosActivos++;
-            }
-            if (medicamento.isPausado()) {
-                medicamentosPausados++;
+        // Filtros alineados con web: con seguimiento (no ocasionales), activos vigentes, no vigentes
+        medicamentosConSeguimiento = new ArrayList<>();
+        for (Medicamento med : todosLosMedicamentos) {
+            if (!MedicamentoUtils.esMedicamentoOcasional(med)) {
+                medicamentosConSeguimiento.add(med);
             }
         }
+        medicamentosConAdherencia = new ArrayList<>();
+        for (Medicamento med : medicamentosConSeguimiento) {
+            if (med.isActivo() && !MedicamentoUtils.estaVencido(med)) {
+                medicamentosConAdherencia.add(med);
+            }
+        }
+        List<Medicamento> noVigentes = new ArrayList<>(medicamentosConSeguimiento);
+        noVigentes.removeAll(medicamentosConAdherencia);
 
-        tvEstadisticasGenerales.setText(String.format(
-            Locale.getDefault(),
-            "Medicamentos Activos: %d\nMedicamentos Pausados: %d\nTotal Medicamentos: %d",
-            medicamentosActivos,
-            medicamentosPausados,
-            totalMedicamentos
-        ));
+        tvEstadisticasGenerales.setText(
+            getString(R.string.adhesion_stat_con_seguimiento, medicamentosConSeguimiento.size()) + "\n"
+                + getString(R.string.adhesion_stat_activos_vigentes, medicamentosConAdherencia.size()) + "\n"
+                + getString(R.string.adhesion_stat_no_vigentes, noVigentes.size()));
 
         List<AdherenciaResumen> resumenes = new ArrayList<>();
         tratamientosConcluidos = new ArrayList<>();
@@ -270,28 +285,20 @@ public class HistorialActivity extends AppCompatActivity {
             List<Toma> tomasMedicamento = AdherenciaCalculator.filtrarTomasPorMedicamento(
                 tomasUsuario,
                 medicamento.getId());
-            boolean esOcasional = medicamento.getTomasDiarias() == 0;
-            
-            // Separar medicamentos ocasionales con tomas
-            if (esOcasional) {
+            if (MedicamentoUtils.esMedicamentoOcasional(medicamento)) {
                 if (!tomasMedicamento.isEmpty()) {
-                    // Medicamento ocasional que fue consumido - agregar a lista separada
                     medicamentosOcasionales.add(medicamento);
                 }
-                // No incluir en adherencia ni en tratamientos concluidos
                 continue;
             }
 
-            // Calcular resumen incluso si no hay tomas (mostrará 0% de adherencia)
             resumenes.add(AdherenciaCalculator.calcularResumenGeneral(medicamento, tomasMedicamento));
 
-            // Incluir medicamentos pausados o finalizados en tratamientos concluidos
             if (medicamento.isPausado() || !medicamento.isActivo()) {
                 tratamientosConcluidos.add(medicamento);
             }
         }
-        
-        // Si no hay tratamientos concluidos pero hay medicamentos activos, mostrar todos (excepto ocasionales)
+
         if (tratamientosConcluidos.isEmpty() && !todosLosMedicamentos.isEmpty()) {
             for (Medicamento medicamento : todosLosMedicamentos) {
                 if (medicamento.getTomasDiarias() > 0) {
@@ -302,19 +309,18 @@ public class HistorialActivity extends AppCompatActivity {
 
         adapter.actualizarMedicamentos(tratamientosConcluidos);
         adapterOcasionales.actualizarMedicamentos(medicamentosOcasionales);
-        
-        // Mostrar/ocultar card de medicamentos ocasionales
+        if (adherenciaAdapter != null) {
+            adherenciaAdapter.actualizarDatos(medicamentosConAdherencia, tomasUsuario);
+        }
+
+        // Sección ocasionales oculta en esta pantalla (solo stats + lista por medicamento)
         if (cardMedicamentosOcasionales != null) {
-            cardMedicamentosOcasionales.setVisibility(
-                medicamentosOcasionales.isEmpty() ? View.GONE : View.VISIBLE);
+            cardMedicamentosOcasionales.setVisibility(View.GONE);
         }
-        
-        // Mostrar/ocultar mensaje vacío para ocasionales
         if (tvEmptyOcasionales != null) {
-            tvEmptyOcasionales.setVisibility(
-                medicamentosOcasionales.isEmpty() ? View.VISIBLE : View.GONE);
+            tvEmptyOcasionales.setVisibility(View.GONE);
         }
-        
+
         cargarGraficoAdherencia(resumenes);
         cargarHistorialCompletoAdherencia();
         configurarPlanAdherencia();
@@ -404,11 +410,12 @@ public class HistorialActivity extends AppCompatActivity {
         }
 
         if (medicamentosPlan.isEmpty()) {
-            cardPlanAdherencia.setVisibility(View.GONE);
             return;
         }
-
-        cardPlanAdherencia.setVisibility(View.VISIBLE);
+        // Plan de adherencia oculto en esta pantalla (solo stats + lista)
+        if (cardPlanAdherencia != null) {
+            cardPlanAdherencia.setVisibility(View.GONE);
+        }
         List<String> nombres = new ArrayList<>();
         for (Medicamento medicamento : medicamentosPlan) {
             nombres.add(medicamento.getNombre());
