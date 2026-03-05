@@ -62,7 +62,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
 
     private String colorSeleccionadoHex = "#FFB6C1"; // Color por defecto (rosa pastel, índice 0)
     private Calendar fechaVencimiento = null;
-    private String horaSeleccionada = "08:00";
+    /** Hora primera toma; null o vacío si no hay tratamiento o aún no se eligió (evita guardar 08:00 por defecto). */
+    private String horaSeleccionada = null;
     private AuthService authService;
     private FirebaseService firebaseService;
     private GoogleCalendarAuthService googleCalendarAuthService;
@@ -70,6 +71,9 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     private Medicamento medicamentoEditar = null; // Medicamento que se está editando (null si es creación)
     private boolean esEdicion = false;
 
+    private MaterialSwitch switchHabilitarTratamiento;
+    private LinearLayout layoutTratamientoContainer;
+    private LinearLayout layoutProgramacionSimple;
     private CheckBox checkUsarProgramacionPersonalizada;
     private MaterialSwitch switchEsCronico;
     private LinearLayout programacionDiasContainer;
@@ -79,6 +83,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     private final List<String> horariosAdicionales = new ArrayList<>();
     private LinearLayout containerHorariosAdicionales;
     private MaterialButton btnAgregarToma;
+    private TextView tvLabelPrimeraToma;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -99,6 +104,10 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         View headerLayout = findViewById(R.id.headerLayout);
         if (headerLayout != null) {
             headerLayout.post(() -> aplicarWindowInsets(headerLayout));
+        }
+        View barraNav = findViewById(R.id.barraNavegacion);
+        if (barraNav != null) {
+            com.controlmedicamentos.myapplication.utils.UIHelper.aplicarInsetsBarraNavegacionInferior(barraNav);
         }
 
         // Inicializar servicios
@@ -124,8 +133,23 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             esEdicion = true;
             cargarMedicamentoParaEditar(medicamentoId);
         } else {
+            aplicarEstadoFormularioSinTratamiento(); // Nuevo medicamento: sin tomas por defecto; usuario debe habilitar tratamiento
             cargarCantidadMedicamentosParaColor();
         }
+    }
+
+    /** Deja el formulario en estado "sin tratamiento": switch OFF, bloque oculto, sin 1 toma ni 08:00 por defecto. */
+    private void aplicarEstadoFormularioSinTratamiento() {
+        if (switchHabilitarTratamiento != null) switchHabilitarTratamiento.setChecked(false);
+        if (layoutTratamientoContainer != null) layoutTratamientoContainer.setVisibility(View.GONE);
+        if (etTomasDiarias != null) etTomasDiarias.setText("");
+        horaSeleccionada = null;
+        if (horariosAdicionales != null) horariosAdicionales.clear();
+        if (containerHorariosAdicionales != null) containerHorariosAdicionales.removeAllViews();
+        if (btnSeleccionarHora != null) btnSeleccionarHora.setText(getString(R.string.btn_seleccionar_hora));
+        if (tilTomasDiarias != null) tilTomasDiarias.setError(null);
+        if (checkUsarProgramacionPersonalizada != null) checkUsarProgramacionPersonalizada.setChecked(false);
+        if (programacionDiasContainer != null) programacionDiasContainer.setVisibility(View.GONE);
     }
 
     private void inicializarVistas() {
@@ -158,10 +182,14 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         btnNavHistorial = findViewById(R.id.btnNavHistorial);
         btnNavAjustes = findViewById(R.id.btnNavAjustes);
 
+        switchHabilitarTratamiento = findViewById(R.id.switchHabilitarTratamiento);
+        layoutTratamientoContainer = findViewById(R.id.layoutTratamientoContainer);
+        layoutProgramacionSimple = findViewById(R.id.layoutProgramacionSimple);
         checkUsarProgramacionPersonalizada = findViewById(R.id.checkUsarProgramacionPersonalizada);
         programacionDiasContainer = findViewById(R.id.programacionDiasContainer);
         containerHorariosAdicionales = findViewById(R.id.containerHorariosAdicionales);
         btnAgregarToma = findViewById(R.id.btnAgregarToma);
+        tvLabelPrimeraToma = findViewById(R.id.tvLabelPrimeraToma);
         for (int i = 0; i < 7; i++) {
             horariosPorDia.add(new ArrayList<>());
         }
@@ -198,11 +226,24 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
         });
 
+        switchHabilitarTratamiento.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (layoutTratamientoContainer != null) {
+                layoutTratamientoContainer.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+            }
+            if (!isChecked) {
+                if (tilTomasDiarias != null) tilTomasDiarias.setError(null);
+            } else {
+                actualizarEstadoCamposProgramacionSimple(checkUsarProgramacionPersonalizada != null && checkUsarProgramacionPersonalizada.isChecked());
+            }
+        });
+
         checkUsarProgramacionPersonalizada.setOnCheckedChangeListener((buttonView, isChecked) -> {
             programacionDiasContainer.setVisibility(isChecked ? View.VISIBLE : View.GONE);
             if (isChecked && programacionDiasContainer.getChildCount() == 0) {
                 construirFilasProgramacion();
             }
+            // Con programación por día, los campos sencillos (tomas diarias, hora primera toma, horarios adicionales) se deshabilitan para evitar inconsistencia
+            actualizarEstadoCamposProgramacionSimple(isChecked);
         });
 
         switchEsCronico.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -213,7 +254,22 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
         });
 
+        // Estado inicial: si por algún motivo el check ya está marcado, deshabilitar campos sencillos
+        actualizarEstadoCamposProgramacionSimple(checkUsarProgramacionPersonalizada.isChecked());
+
         btnAgregarToma.setOnClickListener(v -> mostrarSelectorHoraAdicional());
+    }
+
+    /**
+     * Muestra u oculta el bloque de programación sencilla (tomas diarias, hora primera toma, horarios adicionales).
+     * Cuando está activa la programación por día de la semana, ese bloque se oculta para que solo se use un modo:
+     * o bien la forma sencilla, o bien la programación por día, nunca ambos a la vez.
+     */
+    private void actualizarEstadoCamposProgramacionSimple(boolean programacionPorDiaActiva) {
+        if (layoutProgramacionSimple != null) {
+            layoutProgramacionSimple.setVisibility(programacionPorDiaActiva ? View.GONE : View.VISIBLE);
+        }
+        if (programacionPorDiaActiva && tilTomasDiarias != null) tilTomasDiarias.setError(null);
     }
 
     /** Muestra el selector de hora para agregar una toma adicional (mismo día, todos los días o duración del tratamiento). */
@@ -571,7 +627,6 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         etNombre.setText(medicamento.getNombre());
         etAfeccion.setText(medicamento.getAfeccion());
         etDetalles.setText(medicamento.getDetalles());
-        etTomasDiarias.setText(String.valueOf(medicamento.getTomasDiarias()));
         etStockInicial.setText(String.valueOf(medicamento.getStockActual())); // Mostrar stock actual, no inicial
         boolean esCronico = medicamento.getDiasTratamiento() == -1;
         switchEsCronico.setChecked(esCronico);
@@ -592,39 +647,52 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
         }
         
-        // Programación personalizada por día
-        if (medicamento.isUsarProgramacionPersonalizada() && medicamento.getProgramacionPersonalizada() != null) {
-            for (int d = 0; d < 7; d++) {
-                horariosPorDia.get(d).clear();
-                List<String> list = medicamento.getProgramacionPersonalizada().get(d);
-                if (list != null) horariosPorDia.get(d).addAll(list);
-            }
-            checkUsarProgramacionPersonalizada.setChecked(true);
-            programacionDiasContainer.setVisibility(View.VISIBLE);
-            horariosAdicionales.clear();
-            refrescarContainerHorariosAdicionales();
-            if (programacionDiasContainer.getChildCount() == 0) {
-                construirFilasProgramacion();
-            } else {
-                for (int d = 0; d < 7; d++) {
-                    View row = programacionDiasContainer.getChildAt(d);
-                    refrescarHorariosDia(d, row.findViewById(R.id.containerHorariosDia));
-                }
-            }
+        boolean tieneTratamiento = medicamento.getTomasDiarias() > 0
+            || (medicamento.isUsarProgramacionPersonalizada() && medicamento.getProgramacionPersonalizada() != null && !medicamento.getProgramacionPersonalizada().isEmpty());
+        if (!tieneTratamiento) {
+            switchHabilitarTratamiento.setChecked(false);
+            layoutTratamientoContainer.setVisibility(View.GONE);
+            aplicarEstadoFormularioSinTratamiento();
+            btnSeleccionarHora.setText(getString(R.string.btn_no_aplica_ocasional));
+            btnSeleccionarHora.setEnabled(false);
         } else {
-            // Sin programación por día: cargar primera toma + horarios adicionales
-            horariosAdicionales.clear();
-            if (medicamento.getTomasDiarias() > 0 && medicamento.getHorariosTomas() != null && !medicamento.getHorariosTomas().isEmpty()) {
-                List<String> horarios = medicamento.getHorariosTomas();
-                horaSeleccionada = horarios.get(0);
-                btnSeleccionarHora.setText(horaSeleccionada);
-                for (int i = 1; i < horarios.size(); i++) {
-                    horariosAdicionales.add(horarios.get(i));
+            switchHabilitarTratamiento.setChecked(true);
+            layoutTratamientoContainer.setVisibility(View.VISIBLE);
+            etTomasDiarias.setText(String.valueOf(medicamento.getTomasDiarias()));
+            // Programación personalizada por día
+            if (medicamento.isUsarProgramacionPersonalizada() && medicamento.getProgramacionPersonalizada() != null) {
+                for (int d = 0; d < 7; d++) {
+                    horariosPorDia.get(d).clear();
+                    List<String> list = medicamento.getProgramacionPersonalizada().get(d);
+                    if (list != null) horariosPorDia.get(d).addAll(list);
                 }
+                checkUsarProgramacionPersonalizada.setChecked(true);
+                programacionDiasContainer.setVisibility(View.VISIBLE);
+                horariosAdicionales.clear();
                 refrescarContainerHorariosAdicionales();
-            } else if (medicamento.getTomasDiarias() == 0) {
-                btnSeleccionarHora.setText(getString(R.string.btn_no_aplica_ocasional));
-                btnSeleccionarHora.setEnabled(false);
+                if (programacionDiasContainer.getChildCount() == 0) {
+                    construirFilasProgramacion();
+                } else {
+                    for (int d = 0; d < 7; d++) {
+                        View row = programacionDiasContainer.getChildAt(d);
+                        refrescarHorariosDia(d, row.findViewById(R.id.containerHorariosDia));
+                    }
+                }
+                actualizarEstadoCamposProgramacionSimple(true);
+            } else {
+                // Sin programación por día: cargar primera toma + horarios adicionales
+                horariosAdicionales.clear();
+                if (medicamento.getHorariosTomas() != null && !medicamento.getHorariosTomas().isEmpty()) {
+                    List<String> horarios = medicamento.getHorariosTomas();
+                    horaSeleccionada = horarios.get(0);
+                    btnSeleccionarHora.setText(horaSeleccionada);
+                    btnSeleccionarHora.setEnabled(true);
+                    for (int i = 1; i < horarios.size(); i++) {
+                        horariosAdicionales.add(horarios.get(i));
+                    }
+                    refrescarContainerHorariosAdicionales();
+                }
+                actualizarEstadoCamposProgramacionSimple(false);
             }
         }
 
@@ -667,38 +735,57 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             tilAfeccion.setError(null);
         }
 
-        // Validar tomas diarias (puede estar vacío para medicamentos ocasionales)
-        int tomasDiarias = 0;
-        if (!TextUtils.isEmpty(etTomasDiarias.getText())) {
-            try {
-                tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
-                if (tomasDiarias < 0) {
-                    tilTomasDiarias.setError("Las tomas diarias no pueden ser negativas");
-                    valido = false;
-                } else {
-                    tilTomasDiarias.setError(null);
+        boolean tratamientoHabilitado = switchHabilitarTratamiento != null && switchHabilitarTratamiento.isChecked();
+        if (!tratamientoHabilitado) {
+            tilTomasDiarias.setError(null);
+            // No validar tomas ni horarios ni programación; medicamento será ocasional
+        } else {
+        boolean usaProgramacionPorDia = checkUsarProgramacionPersonalizada != null && checkUsarProgramacionPersonalizada.isChecked();
+
+        if (usaProgramacionPorDia) {
+            // Con programación por día: no se usan tomas diarias ni hora primera toma; validar que al menos un día tenga horarios
+            tilTomasDiarias.setError(null);
+            boolean algunDiaConHorarios = false;
+            for (int d = 0; d < 7; d++) {
+                if (horariosPorDia.get(d) != null && !horariosPorDia.get(d).isEmpty()) {
+                    algunDiaConHorarios = true;
+                    break;
                 }
-            } catch (NumberFormatException e) {
-                tilTomasDiarias.setError("Ingresa un número válido");
+            }
+            if (!algunDiaConHorarios) {
+                Toast.makeText(this, getString(R.string.msg_programacion_por_dia_sin_horarios), Toast.LENGTH_LONG).show();
                 valido = false;
             }
         } else {
-            // Campo vacío = medicamento ocasional (tomasDiarias = 0)
-            tilTomasDiarias.setError(null);
-            tomasDiarias = 0;
-        }
-
-        // Validar horario solo si tomas diarias > 0
-
-        if (tomasDiarias > 0) {
-            // Si tiene tomas diarias, requiere horario
-            if (TextUtils.isEmpty(btnSeleccionarHora.getText()) || 
-                btnSeleccionarHora.getText().toString().equals("Seleccionar hora")) {
-                Toast.makeText(this, getString(R.string.msg_select_time_daily_doses), Toast.LENGTH_SHORT).show();
-                valido = false;
+            // Validar tomas diarias (puede estar vacío para medicamentos ocasionales)
+            int tomasDiarias = 0;
+            if (!TextUtils.isEmpty(etTomasDiarias.getText())) {
+                try {
+                    tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
+                    if (tomasDiarias < 0) {
+                        tilTomasDiarias.setError("Las tomas diarias no pueden ser negativas");
+                        valido = false;
+                    } else {
+                        tilTomasDiarias.setError(null);
+                    }
+                } catch (NumberFormatException e) {
+                    tilTomasDiarias.setError("Ingresa un número válido");
+                    valido = false;
+                }
+            } else {
+                tilTomasDiarias.setError(null);
+                tomasDiarias = 0;
+            }
+            // Validar horario solo si tomas diarias > 0
+            if (tomasDiarias > 0) {
+                if (TextUtils.isEmpty(btnSeleccionarHora.getText()) || 
+                    getString(R.string.btn_seleccionar_hora).equals(btnSeleccionarHora.getText().toString())) {
+                    Toast.makeText(this, getString(R.string.msg_select_time_daily_doses), Toast.LENGTH_SHORT).show();
+                    valido = false;
+                }
             }
         }
-        // Si tomas diarias = 0, no requiere horario (medicamento ocasional)
+        }
 
         if (TextUtils.isEmpty(etStockInicial.getText())) {
             tilStockInicial.setError("El stock inicial es requerido");
@@ -734,25 +821,30 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         Object selectedItem = spinnerPresentacion.getSelectedItem();
         String presentacion = selectedItem != null ? selectedItem.toString() : "Comprimidos";
         
-        // Construir lista de horarios: primera toma + adicionales (sin programación por día)
+        boolean tratamientoHabilitado = switchHabilitarTratamiento != null && switchHabilitarTratamiento.isChecked();
+        int tomasDiarias = 0;
+        String horarioPrimeraToma = "";
         List<String> listaHorarios = new ArrayList<>();
-        if (horaSeleccionada != null && !horaSeleccionada.isEmpty()) {
-            listaHorarios.add(horaSeleccionada);
-        }
-        if (horariosAdicionales != null) {
-            listaHorarios.addAll(horariosAdicionales);
-        }
-        Collections.sort(listaHorarios, String::compareTo);
-
-        int tomasDiarias = listaHorarios.isEmpty() ? 0 : listaHorarios.size();
-        if (tomasDiarias == 0 && !TextUtils.isEmpty(etTomasDiarias.getText())) {
-            try {
-                tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
-            } catch (NumberFormatException e) {
-                tomasDiarias = 0;
+        
+        if (tratamientoHabilitado) {
+            // Construir lista de horarios: primera toma + adicionales (sin programación por día)
+            if (horaSeleccionada != null && !horaSeleccionada.isEmpty()) {
+                listaHorarios.add(horaSeleccionada);
             }
+            if (horariosAdicionales != null) {
+                listaHorarios.addAll(horariosAdicionales);
+            }
+            Collections.sort(listaHorarios, String::compareTo);
+            tomasDiarias = listaHorarios.isEmpty() ? 0 : listaHorarios.size();
+            if (tomasDiarias == 0 && etTomasDiarias != null && !TextUtils.isEmpty(etTomasDiarias.getText())) {
+                try {
+                    tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
+                } catch (NumberFormatException e) {
+                    tomasDiarias = 0;
+                }
+            }
+            horarioPrimeraToma = listaHorarios.isEmpty() ? "" : listaHorarios.get(0);
         }
-        String horarioPrimeraToma = listaHorarios.isEmpty() ? "" : listaHorarios.get(0);
         
         // Obtener stock inicial (puede estar vacío, usar valor por defecto)
         int stockInicial = 0;
@@ -813,8 +905,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             medicamento.setFechaVencimiento(fechaVencimiento.getTime());
         }
 
-        // Programación personalizada: si está activa y hay al menos un día con horarios
-        if (checkUsarProgramacionPersonalizada != null && checkUsarProgramacionPersonalizada.isChecked()) {
+        // Programación personalizada: solo si tratamiento está habilitado y la opción está activa
+        if (tratamientoHabilitado && checkUsarProgramacionPersonalizada != null && checkUsarProgramacionPersonalizada.isChecked()) {
             Map<Integer, List<String>> programacion = new HashMap<>();
             List<String> todosHorarios = new ArrayList<>();
             int maxTomasDia = 0;
@@ -878,9 +970,17 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     }
 
     private void mostrarSelectorHora() {
-        String[] partes = horaSeleccionada.split(":");
-        int hora = Integer.parseInt(partes[0]);
-        int minuto = Integer.parseInt(partes[1]);
+        int hora = 8;
+        int minuto = 0;
+        if (horaSeleccionada != null && !horaSeleccionada.isEmpty()) {
+            String[] partes = horaSeleccionada.split(":");
+            if (partes.length >= 2) {
+                try {
+                    hora = Integer.parseInt(partes[0]);
+                    minuto = Integer.parseInt(partes[1]);
+                } catch (NumberFormatException ignored) { }
+            }
+        }
 
         TimePickerDialog timePickerDialog = new TimePickerDialog(this,
                 new TimePickerDialog.OnTimeSetListener() {

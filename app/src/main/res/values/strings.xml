@@ -38,6 +38,7 @@
     <!-- Medicine Item -->
     <string name="medicine_taken">Tomado</string>
     <string name="medicine_omitted">Omitido</string>
+    <string name="tomas_pendientes_count">%d Tomas pendientes</string>
     <string name="medicine_stock">Stock:</string>
     <string name="medicine_today_doses">Tomas de hoy:</string>
     <string name="medicine_next_dose">Próxima:</string>
@@ -72,6 +73,7 @@
     <string name="msg_toma_pospuesta">Toma pospuesta 10 minutos. Quedan %1$d posposiciones disponibles</string>
     <string name="msg_toma_no_posponible">No se puede posponer más. Máximo 3 posposiciones alcanzado. La toma se considera omitida.</string>
     <string name="btn_posponer">Posponer</string>
+    <string name="btn_pospuesto">Pospuesto</string>
     <string name="btn_posponer_help">Posponer aparece cuando hay una toma en retraso o en alerta; permite posponer la toma 10 minutos.</string>
 
     <!-- Buttons -->
@@ -92,6 +94,7 @@
     <!-- Form Fields -->
     <string name="field_medicine_name">Nombre del medicamento</string>
     <string name="field_presentation">Presentación</string>
+    <string name="switch_habilitar_tratamiento">Habilitar tratamiento (tomas programadas)</string>
     <string name="field_daily_doses">Tomas diarias</string>
     <string name="field_first_dose_time">Hora primera toma</string>
     <string name="field_condition">Afección que trata</string>
@@ -139,6 +142,7 @@
     <string name="btn_agregar_toma">+ Agregar toma</string>
     <string name="btn_quitar_horario">Quitar</string>
     <string name="programacion_horario_duplicado">Este horario ya está asignado para este día</string>
+    <string name="msg_programacion_por_dia_sin_horarios">Con programación por día debe haber al menos un día con al menos un horario</string>
     <string name="day_domingo">Domingo</string>
     <string name="day_lunes">Lunes</string>
     <string name="day_martes">Martes</string>
@@ -281,6 +285,7 @@
     <string name="msg_error_could_not_create_medicine">Error: No se pudo crear el medicamento</string>
     <string name="msg_medicine_saved">Medicamento guardado exitosamente</string>
     <string name="msg_medicine_updated">Medicamento actualizado exitosamente</string>
+    <string name="btn_seleccionar_hora">Seleccionar hora</string>
     <string name="msg_select_time_daily_doses">Debe seleccionar una hora para medicamentos con tomas diarias</string>
     <string name="msg_stock_requires_expiration">Los medicamentos con stock deben tener fecha de vencimiento</string>
     <string name="btn_guardar_cambios">Guardar Cambios</string>

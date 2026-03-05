@@ -38,8 +38,8 @@
 
     </LinearLayout>
 
-    <!-- ScrollView para el contenido -->
-    <ScrollView
+    <!-- NestedScrollView para que los RecyclerView con wrap_content midan todo el contenido -->
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@+id/headerLayout"
@@ -118,7 +118,7 @@
 
         </LinearLayout>
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <!-- Barra de navegación inferior -->
     <include

@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.controlmedicamentos.myapplication.R;
 import com.controlmedicamentos.myapplication.models.AdherenciaIntervalo;
@@ -15,6 +16,8 @@ import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.Toma;
 import com.controlmedicamentos.myapplication.utils.AdherenciaCalculator;
 import com.controlmedicamentos.myapplication.utils.EstadoAdherencia;
+import com.controlmedicamentos.myapplication.utils.MedicamentoUtils;
+import com.google.android.material.card.MaterialCardView;
 import java.util.List;
 
 /**
@@ -78,6 +81,14 @@ public class AdherenciaAdapter extends RecyclerView.Adapter<AdherenciaAdapter.Ad
         }
 
         void bind(Medicamento medicamento, List<Toma> tomasMedicamento) {
+            // Fondo gris claro para activos no vigentes (vencido, pausado o sin stock)
+            boolean vigente = MedicamentoUtils.esActivoVigente(medicamento);
+            if (itemView instanceof MaterialCardView) {
+                int colorFondo = vigente
+                    ? ContextCompat.getColor(context, android.R.color.white)
+                    : ContextCompat.getColor(context, R.color.card_adhesion_no_vigente);
+                ((MaterialCardView) itemView).setCardBackgroundColor(colorFondo);
+            }
             tvNombreMedicamento.setText(medicamento.getNombre());
             boolean cronico = medicamento.getDiasTratamiento() == -1;
             tvBadgeCronico.setVisibility(cronico ? View.VISIBLE : View.GONE);

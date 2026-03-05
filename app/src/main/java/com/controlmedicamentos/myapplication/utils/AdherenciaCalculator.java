@@ -43,10 +43,17 @@ public final class AdherenciaCalculator {
         }
 
         int diasSeguimiento = Math.max(1, diasEntre(fechaInicio, fechaFin) + 1);
-        boolean esOcasional = medicamento.getTomasDiarias() == 0;
+        boolean tieneProgramacionSemanal = MedicamentoUtils.tieneTomasProgramadasEnLaSemana(medicamento);
+        boolean esOcasional = !tieneProgramacionSemanal && medicamento.getTomasDiarias() == 0;
 
-        int tomasEsperadas = esOcasional ? contarTomasEnRango(tomas, fechaInicio, fechaFin) :
-            medicamento.getTomasDiarias() * diasSeguimiento;
+        int tomasEsperadas;
+        if (tieneProgramacionSemanal) {
+            tomasEsperadas = contarTomasEsperadasEnRango(medicamento, fechaInicio, fechaFin);
+        } else if (esOcasional) {
+            tomasEsperadas = contarTomasEnRango(tomas, fechaInicio, fechaFin);
+        } else {
+            tomasEsperadas = medicamento.getTomasDiarias() * diasSeguimiento;
+        }
         int tomasRealizadas = contarTomasEnRango(tomas, fechaInicio, fechaFin);
 
         float porcentaje;
@@ -90,16 +97,23 @@ public final class AdherenciaCalculator {
         Calendar cal = Calendar.getInstance();
         cal.setTime(truncarFecha(sumarDias(hoy, -6)));
 
+        boolean tieneProgramacionSemanal = MedicamentoUtils.tieneTomasProgramadasEnLaSemana(medicamento);
         for (int i = 0; i < 7; i++) {
             Date inicio = cal.getTime();
             Date fin = finDeDia(inicio);
 
-            boolean esOcasional = medicamento.getTomasDiarias() == 0;
-            int esperadas = esOcasional ? 1 : medicamento.getTomasDiarias();
-            int realizadas = contarTomasEnRango(tomas, inicio, fin);
-            if (esOcasional && realizadas == 0) {
-                esperadas = 1; // se usa como factor para mostrar 0%
+            int esperadas;
+            if (tieneProgramacionSemanal) {
+                int diaSemana0a6 = cal.get(Calendar.DAY_OF_WEEK) - 1;
+                esperadas = medicamento.getHorariosParaDiaSemana(diaSemana0a6).size();
+            } else {
+                boolean esOcasional = medicamento.getTomasDiarias() == 0;
+                esperadas = esOcasional ? 1 : medicamento.getTomasDiarias();
+                if (esOcasional && contarTomasEnRango(tomas, inicio, fin) == 0) {
+                    esperadas = 1; // se usa como factor para mostrar 0%
+                }
             }
+            int realizadas = contarTomasEnRango(tomas, inicio, fin);
             float porcentaje = esperadas == 0 ? 0f : Math.min(100f, (realizadas * 100f) / (float) esperadas);
             String etiqueta = obtenerNombreCortoDia(cal.get(Calendar.DAY_OF_WEEK));
 
@@ -115,13 +129,19 @@ public final class AdherenciaCalculator {
         Calendar cal = Calendar.getInstance();
         cal.setTime(truncarFecha(sumarDias(hoy, -27)));
 
+        boolean tieneProgramacionSemanal = MedicamentoUtils.tieneTomasProgramadasEnLaSemana(medicamento);
         for (int semana = 0; semana < 4; semana++) {
             Date inicio = cal.getTime();
             Date fin = finDeDia(sumarDias(inicio, 6));
-            boolean esOcasional = medicamento.getTomasDiarias() == 0;
-            int diasIntervalo = diasEntre(inicio, fin) + 1;
-            int esperadas = esOcasional ? Math.max(1, contarTomasEnRango(tomas, inicio, fin))
-                : medicamento.getTomasDiarias() * diasIntervalo;
+            int esperadas;
+            if (tieneProgramacionSemanal) {
+                esperadas = contarTomasEsperadasEnRango(medicamento, inicio, fin);
+            } else {
+                boolean esOcasional = medicamento.getTomasDiarias() == 0;
+                int diasIntervalo = diasEntre(inicio, fin) + 1;
+                esperadas = esOcasional ? Math.max(1, contarTomasEnRango(tomas, inicio, fin))
+                    : medicamento.getTomasDiarias() * diasIntervalo;
+            }
             int realizadas = contarTomasEnRango(tomas, inicio, fin);
             float porcentaje = esperadas == 0 ? 0f : Math.min(100f, (realizadas * 100f) / (float) esperadas);
             resultado.add(new AdherenciaIntervalo(
@@ -179,6 +199,25 @@ public final class AdherenciaCalculator {
     private static int diasEntre(Date inicio, Date fin) {
         long diff = finDeDia(fin).getTime() - truncarFecha(inicio).getTime();
         return (int) (diff / (1000 * 60 * 60 * 24));
+    }
+
+    /**
+     * Cuenta las tomas esperadas en un rango de fechas según la programación del medicamento.
+     * Respeta programación por día: solo cuenta horarios del día de la semana correspondiente.
+     */
+    private static int contarTomasEsperadasEnRango(Medicamento medicamento, Date inicio, Date fin) {
+        if (medicamento == null) return 0;
+        Date d = truncarFecha(inicio);
+        Date finTrunc = truncarFecha(fin);
+        Calendar cal = Calendar.getInstance();
+        int total = 0;
+        while (!d.after(finTrunc)) {
+            cal.setTime(d);
+            int diaSemana0a6 = cal.get(Calendar.DAY_OF_WEEK) - 1; // 0=Dom, 6=Sab
+            total += medicamento.getHorariosParaDiaSemana(diaSemana0a6).size();
+            d = sumarDias(d, 1);
+        }
+        return total;
     }
 
     private static int contarTomasEnRango(List<Toma> tomas, Date inicio, Date fin) {
@@ -299,15 +338,18 @@ public final class AdherenciaCalculator {
                 }
 
                 List<Toma> tomasMedicamento = filtrarTomasPorMedicamento(todasLasTomas, medicamento.getId());
-                boolean esOcasional = medicamento.getTomasDiarias() == 0;
-                int diasIntervalo = diasEntre(inicio, fin) + 1;
-                
-                int esperadasMed = esOcasional ? 
-                    Math.max(1, contarTomasEnRango(tomasMedicamento, inicio, fin)) :
-                    medicamento.getTomasDiarias() * diasIntervalo;
-                
+                int esperadasMed;
+                if (MedicamentoUtils.tieneTomasProgramadasEnLaSemana(medicamento)) {
+                    esperadasMed = contarTomasEsperadasEnRango(medicamento, inicio, fin);
+                } else {
+                    boolean esOcasional = medicamento.getTomasDiarias() == 0;
+                    int diasIntervalo = diasEntre(inicio, fin) + 1;
+                    esperadasMed = esOcasional ?
+                        Math.max(1, contarTomasEnRango(tomasMedicamento, inicio, fin)) :
+                        medicamento.getTomasDiarias() * diasIntervalo;
+                }
                 int realizadasMed = contarTomasEnRango(tomasMedicamento, inicio, fin);
-                
+
                 esperadas += esperadasMed;
                 realizadas += realizadasMed;
             }
@@ -359,15 +401,18 @@ public final class AdherenciaCalculator {
                 }
 
                 List<Toma> tomasMedicamento = filtrarTomasPorMedicamento(todasLasTomas, medicamento.getId());
-                boolean esOcasional = medicamento.getTomasDiarias() == 0;
-                int diasIntervalo = diasEntre(inicio, fin) + 1;
-                
-                int esperadasMed = esOcasional ? 
-                    Math.max(1, contarTomasEnRango(tomasMedicamento, inicio, fin)) :
-                    medicamento.getTomasDiarias() * diasIntervalo;
-                
+                int esperadasMed;
+                if (MedicamentoUtils.tieneTomasProgramadasEnLaSemana(medicamento)) {
+                    esperadasMed = contarTomasEsperadasEnRango(medicamento, inicio, fin);
+                } else {
+                    boolean esOcasional = medicamento.getTomasDiarias() == 0;
+                    int diasIntervalo = diasEntre(inicio, fin) + 1;
+                    esperadasMed = esOcasional ?
+                        Math.max(1, contarTomasEnRango(tomasMedicamento, inicio, fin)) :
+                        medicamento.getTomasDiarias() * diasIntervalo;
+                }
                 int realizadasMed = contarTomasEnRango(tomasMedicamento, inicio, fin);
-                
+
                 esperadas += esperadasMed;
                 realizadas += realizadasMed;
             }

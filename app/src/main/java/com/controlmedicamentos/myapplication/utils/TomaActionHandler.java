@@ -69,13 +69,39 @@ public class TomaActionHandler {
     }
 
     /**
-     * Marca una toma como realizada.
+     * Marca como realizada la toma del horario indicado (para botones por franja).
+     */
+    public void marcarTomaComoTomada(Medicamento medicamento, String horario, TomaActionCallback callback) {
+        if (!ValidationUtils.isValidMedicamento(medicamento)) {
+            if (callback != null) callback.onError(new Exception("Medicamento inválido"));
+            return;
+        }
+        if (!NetworkUtils.isNetworkAvailable(context)) {
+            if (callback != null) callback.onError(new Exception("No hay conexión a internet"));
+            return;
+        }
+        if (horario == null || horario.isEmpty()) {
+            if (callback != null) callback.onError(new Exception("Horario no válido"));
+            return;
+        }
+        TomaProgramada toma = tomaTrackingService.getTomaProgramadaPorHorario(medicamento.getId(), horario);
+        if (toma == null || toma.isTomada()) {
+            if (callback != null) callback.onError(new Exception("No hay toma pendiente para ese horario"));
+            return;
+        }
+        String error = tomaTrackingService.validarPuedeMarcarToma(medicamento.getId(), horario);
+        if (error != null) {
+            if (callback != null) callback.onError(new Exception(error));
+            return;
+        }
+        ejecutarMarcarToma(medicamento, toma, callback);
+    }
+
+    /**
+     * Marca una toma como realizada (usa la próxima toma válida).
      * 
      * @param medicamento El medicamento. No debe ser null.
      * @param callback El callback para notificar el resultado. Puede ser null.
-     * 
-     * @param medicamento El medicamento para el cual registrar la toma.
-     * @param callback El callback para notificar el resultado.
      */
     public void marcarTomaComoTomada(Medicamento medicamento, TomaActionCallback callback) {
         if (!ValidationUtils.isValidMedicamento(medicamento)) {
@@ -145,6 +171,10 @@ public class TomaActionHandler {
             return;
         }
         
+        ejecutarMarcarToma(medicamento, tomaProximaFinal, callback);
+    }
+
+    private void ejecutarMarcarToma(Medicamento medicamento, TomaProgramada tomaProximaFinal, TomaActionCallback callback) {
         // Guardar estado anterior para rollback
         final int stockAnterior = medicamento.getStockActual();
         final int diasRestantesAnteriores = medicamento.getDiasRestantesDuracion();

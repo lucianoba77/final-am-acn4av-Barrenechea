@@ -114,6 +114,30 @@
 
                     </com.google.android.material.textfield.TextInputLayout>
 
+                    <!-- Habilitar tratamiento: si está OFF, el medicamento es ocasional (sin tomas programadas). Evita valores por defecto. -->
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchHabilitarTratamiento"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/switch_habilitar_tratamiento"
+                        android:textSize="@dimen/text_size_medium"
+                        android:checked="false"
+                        android:layout_marginBottom="@dimen/margin_small" />
+
+                    <LinearLayout
+                        android:id="@+id/layoutTratamientoContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                    <!-- Forma sencilla: solo visible cuando NO se usa programación por día -->
+                    <LinearLayout
+                        android:id="@+id/layoutProgramacionSimple"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
                     <!-- Tomas diarias -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilTomasDiarias"
@@ -132,8 +156,9 @@
 
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Horario primera toma -->
+                    <!-- Horario primera toma (deshabilitado si se usa programación por día de la semana) -->
                     <TextView
+                        android:id="@+id/tvLabelPrimeraToma"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/field_first_dose_time"
@@ -168,6 +193,8 @@
                         style="@style/Widget.Material3.Button.TextButton"
                         android:layout_marginBottom="@dimen/margin_medium" />
 
+                    </LinearLayout>
+
                     <!-- Programación personalizada por día -->
                     <CheckBox
                         android:id="@+id/checkUsarProgramacionPersonalizada"
@@ -183,6 +210,8 @@
                         android:orientation="vertical"
                         android:visibility="gone"
                         android:layout_marginBottom="@dimen/margin_medium" />
+
+                    </LinearLayout>
 
                     <!-- Stock inicial -->
                     <com.google.android.material.textfield.TextInputLayout

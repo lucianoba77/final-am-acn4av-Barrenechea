@@ -21,6 +21,7 @@ import com.controlmedicamentos.myapplication.models.Toma;
 import com.controlmedicamentos.myapplication.services.AuthService;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
+import com.controlmedicamentos.myapplication.utils.WrapContentLinearLayoutManager;
 import com.controlmedicamentos.myapplication.utils.AlarmScheduler;
 import com.controlmedicamentos.myapplication.utils.GoogleCalendarSyncHelper;
 import com.controlmedicamentos.myapplication.utils.Logger;
@@ -68,6 +69,8 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     private GoogleCalendarSyncHelper googleCalendarSyncHelper;
     private TomaTrackingService tomaTrackingService;
     private com.google.firebase.firestore.ListenerRegistration medicamentosListener;
+    /** Ignorar el primer disparo del listener (snapshot inicial) para evitar doble carga y que una respuesta con menos datos sobrescriba la correcta. */
+    private boolean listenerPrimerDisparo = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,6 +86,10 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         View headerLayout = findViewById(R.id.headerLayout);
         if (headerLayout != null) {
             headerLayout.post(() -> aplicarWindowInsets(headerLayout));
+        }
+        View barraNav = findViewById(R.id.barraNavegacion);
+        if (barraNav != null) {
+            com.controlmedicamentos.myapplication.utils.UIHelper.aplicarInsetsBarraNavegacionInferior(barraNav);
         }
 
         // Ocultar ActionBar
@@ -120,8 +127,14 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
             new FirebaseService.FirestoreListCallback() {
                 @Override
                 public void onSuccess(List<?> result) {
+                    // Ignorar el primer disparo (snapshot inicial): la carga inicial ya hace get().
+                    // Evita doble carga y que una respuesta con menos datos (p. ej. caché) sobrescriba la correcta.
+                    if (listenerPrimerDisparo) {
+                        listenerPrimerDisparo = false;
+                        Logger.d(TAG, "configurarListenerTiempoReal: Primer disparo ignorado; no recargar para evitar doble carga");
+                        return;
+                    }
                     Logger.d(TAG, "configurarListenerTiempoReal: Cambio detectado en Firestore, recargando medicamentos...");
-                    // Recargar medicamentos cuando hay cambios
                     cargarMedicamentos();
                 }
                 
@@ -160,19 +173,22 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         // Adapter para medicamentos con tratamiento (con stock)
         adapterTratamiento = new BotiquinAdapter(this, medicamentosTratamiento);
         adapterTratamiento.setOnMedicamentoClickListener(this);
-        rvMedicamentosTratamiento.setLayoutManager(new LinearLayoutManager(this));
+        rvMedicamentosTratamiento.setHasFixedSize(false);
+        rvMedicamentosTratamiento.setLayoutManager(new WrapContentLinearLayoutManager(this));
         rvMedicamentosTratamiento.setAdapter(adapterTratamiento);
         
         // Adapter para medicamentos con tratamiento (sin stock)
         adapterTratamientoSinStock = new BotiquinAdapter(this, medicamentosTratamientoSinStock);
         adapterTratamientoSinStock.setOnMedicamentoClickListener(this);
-        rvMedicamentosTratamientoSinStock.setLayoutManager(new LinearLayoutManager(this));
+        rvMedicamentosTratamientoSinStock.setHasFixedSize(false);
+        rvMedicamentosTratamientoSinStock.setLayoutManager(new WrapContentLinearLayoutManager(this));
         rvMedicamentosTratamientoSinStock.setAdapter(adapterTratamientoSinStock);
         
         // Adapter para medicamentos ocasionales
         adapterOcasionales = new BotiquinAdapter(this, medicamentosOcasionales);
         adapterOcasionales.setOnMedicamentoClickListener(this);
-        rvMedicamentosOcasionales.setLayoutManager(new LinearLayoutManager(this));
+        rvMedicamentosOcasionales.setHasFixedSize(false);
+        rvMedicamentosOcasionales.setLayoutManager(new WrapContentLinearLayoutManager(this));
         rvMedicamentosOcasionales.setAdapter(adapterOcasionales);
     }
 
@@ -398,6 +414,11 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                     
                     // Mostrar/ocultar secciones según corresponda
                     actualizarVisibilidadSecciones();
+                    
+                    // Forzar nueva medición para que se muestren todos los ítems (RecyclerView en NestedScrollView)
+                    if (rvMedicamentosTratamiento != null) rvMedicamentosTratamiento.requestLayout();
+                    if (rvMedicamentosTratamientoSinStock != null) rvMedicamentosTratamientoSinStock.requestLayout();
+                    if (rvMedicamentosOcasionales != null) rvMedicamentosOcasionales.requestLayout();
                     
                     Logger.d(TAG, "cargarMedicamentos: [UI Thread] Actualización de UI completada");
                     

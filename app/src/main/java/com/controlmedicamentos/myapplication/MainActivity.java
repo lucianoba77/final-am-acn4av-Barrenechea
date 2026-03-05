@@ -40,6 +40,7 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
     private AuthService authService;
     private FirebaseService firebaseService;
     private TomaTrackingService tomaTrackingService;
+    private boolean firstResume = true;
     private MedicamentoDataManager dataManager;
     private TomaActionHandler tomaActionHandler;
     private StockAlertManager stockAlertManager;
@@ -64,6 +65,11 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             View headerLayout = findViewById(R.id.headerLayout);
             if (headerLayout != null) {
                 headerLayout.post(() -> UIHelper.aplicarWindowInsets(headerLayout, this));
+            }
+            // Respetar barra de navegación del sistema para que el menú inferior no quede solapado
+            View barraNav = findViewById(R.id.barraNavegacion);
+            if (barraNav != null) {
+                UIHelper.aplicarInsetsBarraNavegacionInferior(barraNav);
             }
 
             // Inicializar servicios
@@ -108,6 +114,33 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
                 Logger.e(TAG, "Error al redirigir a login", ex);
                 finish();
             }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (firstResume) {
+            firstResume = false;
+            return;
+        }
+        // Refrescar al volver de otra pantalla (p. ej. Botiquín) para que el dashboard coincida con el Botiquín
+        if (dataManager != null && authService != null && authService.isUserLoggedIn()) {
+            dataManager.cargarMedicamentos(null, new MedicamentoDataManager.DataCallback() {
+                @Override
+                public void onDataLoaded(List<Medicamento> medicamentosParaDashboard, List<Medicamento> todosLosMedicamentos) {
+                    if (adapter != null) {
+                        medicamentos = dataManager.ordenarPorHorario(medicamentosParaDashboard);
+                        adapter.actualizarMedicamentos(medicamentos);
+                        actualizarVisibilidadListaVacia();
+                    }
+                    if (stockAlertManager != null && todosLosMedicamentos != null) {
+                        stockAlertManager.verificarAlertasStock(todosLosMedicamentos);
+                    }
+                }
+                @Override
+                public void onError(Exception exception) { /* no mostrar error en refresh en segundo plano */ }
+            });
         }
     }
 
@@ -175,15 +208,12 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             @Override
             public void onDataLoaded(List<Medicamento> medicamentosParaDashboard, List<Medicamento> todosLosMedicamentos) {
                 try {
-                    if (adapter != null && !dataManager.isListenerYaActualizo()) {
+                    if (adapter != null) {
                         medicamentos = dataManager.ordenarPorHorario(medicamentosParaDashboard);
                         adapter.actualizarMedicamentos(medicamentos);
                         actualizarVisibilidadListaVacia();
-                        Logger.d(TAG, "Carga inicial: dashboard actualizado con " + medicamentos.size() + " medicamentos");
-                    } else if (dataManager.isListenerYaActualizo()) {
-                        Logger.d(TAG, "Carga inicial: omitida porque el listener ya actualizó los datos");
+                        Logger.d(TAG, "Carga inicial: dashboard actualizado con " + medicamentos.size() + " medicamentos (máx en Botiquín: " + (todosLosMedicamentos != null ? todosLosMedicamentos.size() : 0) + ")");
                     }
-                    
                     // Verificar alertas de stock
                     stockAlertManager.verificarAlertasStock(todosLosMedicamentos);
                 } catch (Exception e) {
@@ -297,6 +327,49 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         boolean pospuesta = tomaActionHandler.posponerToma(medicamento, horarioToma);
         
         // Actualizar la UI independientemente del resultado para reflejar cualquier cambio
+        medicamentos = dataManager.ordenarPorHorario(medicamentos);
+        adapter.actualizarMedicamentos(medicamentos);
+    }
+
+    @Override
+    public void onTomadoHorarioClick(Medicamento medicamento, String horario) {
+        tomaActionHandler.marcarTomaComoTomada(medicamento, horario, new TomaActionHandler.TomaActionCallback() {
+            @Override
+            public void onSuccess(Medicamento med, boolean completoTodasLasTomas, boolean tratamientoCompletado) {
+                if (completoTodasLasTomas) {
+                    medicamentos.remove(med);
+                    adapter.actualizarMedicamentos(medicamentos);
+                    actualizarVisibilidadListaVacia();
+                    Toast.makeText(MainActivity.this,
+                            getString(R.string.msg_all_takes_completed, med.getNombre()),
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    medicamentos = dataManager.ordenarPorHorario(medicamentos);
+                    adapter.actualizarMedicamentos(medicamentos);
+                    Toast.makeText(MainActivity.this,
+                            getString(R.string.msg_taken_short, med.getNombre()),
+                            Toast.LENGTH_SHORT).show();
+                }
+                if (tratamientoCompletado) {
+                    Toast.makeText(MainActivity.this,
+                            getString(R.string.msg_treatment_completed, med.getNombre()),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+            @Override
+            public void onError(Exception exception) {
+                String errorMessage = (exception != null && exception.getMessage() != null)
+                        ? exception.getMessage()
+                        : getString(R.string.msg_error_registering_take);
+                ErrorHandler.handleErrorWithCustomMessage(MainActivity.this, exception, TAG, errorMessage);
+            }
+        });
+    }
+
+    @Override
+    public void onPosponerHorarioClick(Medicamento medicamento, String horario) {
+        if (medicamento == null || horario == null) return;
+        tomaActionHandler.posponerToma(medicamento, horario);
         medicamentos = dataManager.ordenarPorHorario(medicamentos);
         adapter.actualizarMedicamentos(medicamentos);
     }

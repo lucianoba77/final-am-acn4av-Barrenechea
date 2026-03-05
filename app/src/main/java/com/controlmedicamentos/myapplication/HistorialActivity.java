@@ -26,6 +26,7 @@ import com.controlmedicamentos.myapplication.utils.AdherenciaCalculator;
 import com.controlmedicamentos.myapplication.utils.MedicamentoUtils;
 import com.controlmedicamentos.myapplication.utils.NetworkUtils;
 import com.controlmedicamentos.myapplication.utils.NavigationHelper;
+import com.controlmedicamentos.myapplication.utils.WrapContentLinearLayoutManager;
 import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.BarData;
@@ -55,9 +56,9 @@ public class HistorialActivity extends AppCompatActivity {
     private List<Medicamento> tratamientosConcluidos = new ArrayList<>();
     private List<Medicamento> medicamentosOcasionales = new ArrayList<>();
     private List<Medicamento> todosLosMedicamentos = new ArrayList<>();
-    /** Medicamentos con seguimiento (no ocasionales) para estadísticas y lista de adherencia. */
+    /** Medicamentos con seguimiento (tomas programadas): lista para estadísticas y cards de adherencia. */
     private List<Medicamento> medicamentosConSeguimiento = new ArrayList<>();
-    /** Activos y no vencidos; son los que se muestran en "Adherencia por medicamento (Total)". */
+    /** Activos vigentes (con seguimiento + activo, no vencido, con stock); solo para conteo en estadísticas. */
     private List<Medicamento> medicamentosConAdherencia = new ArrayList<>();
     private List<Toma> tomasUsuario = new ArrayList<>();
     private AuthService authService;
@@ -100,6 +101,10 @@ public class HistorialActivity extends AppCompatActivity {
         View headerLayout = findViewById(R.id.headerLayout);
         if (headerLayout != null) {
             headerLayout.post(() -> aplicarWindowInsets(headerLayout));
+        }
+        View barraNav = findViewById(R.id.barraNavegacion);
+        if (barraNav != null) {
+            com.controlmedicamentos.myapplication.utils.UIHelper.aplicarInsetsBarraNavegacionInferior(barraNav);
         }
 
         // Inicializar servicios
@@ -190,8 +195,9 @@ public class HistorialActivity extends AppCompatActivity {
         rvMedicamentosOcasionales.setLayoutManager(new LinearLayoutManager(this));
         rvMedicamentosOcasionales.setAdapter(adapterOcasionales);
 
-        adherenciaAdapter = new AdherenciaAdapter(this, medicamentosConAdherencia, tomasUsuario);
-        rvAdherenciaPorMedicamento.setLayoutManager(new LinearLayoutManager(this));
+        adherenciaAdapter = new AdherenciaAdapter(this, medicamentosConSeguimiento, tomasUsuario);
+        rvAdherenciaPorMedicamento.setHasFixedSize(false);
+        rvAdherenciaPorMedicamento.setLayoutManager(new WrapContentLinearLayoutManager(this));
         rvAdherenciaPorMedicamento.setAdapter(adherenciaAdapter);
     }
 
@@ -206,10 +212,13 @@ public class HistorialActivity extends AppCompatActivity {
         firebaseService.obtenerMedicamentos(new FirebaseService.FirestoreListCallback() {
             @Override
             public void onSuccess(List<?> result) {
-                todosLosMedicamentos = result != null
+                List<Medicamento> lista = result != null
                     ? (List<Medicamento>) result
                     : new ArrayList<>();
-                cargarTomasUsuario();
+                runOnUiThread(() -> {
+                    todosLosMedicamentos = lista;
+                    cargarTomasUsuario();
+                });
             }
 
             @Override
@@ -224,8 +233,8 @@ public class HistorialActivity extends AppCompatActivity {
             @Override
             public void onSuccess(List<?> result) {
                 tomasUsuario = result != null ? (List<Toma>) result : new ArrayList<>();
-                // Procesar información incluso si no hay tomas
-                procesarInformacion();
+                // Procesar en UI thread para que el adapter y las vistas se actualicen correctamente
+                runOnUiThread(() -> procesarInformacion());
             }
 
             @Override
@@ -233,13 +242,15 @@ public class HistorialActivity extends AppCompatActivity {
                 android.util.Log.e("HistorialActivity", "Error al obtener tomas del usuario", exception);
                 // Continuar procesando con lista vacía de tomas
                 tomasUsuario = new ArrayList<>();
-                procesarInformacion();
-                // Mostrar mensaje informativo en lugar de error
-                if (todosLosMedicamentos.isEmpty()) {
-                    tvEstadisticasGenerales.setText("No hay medicamentos registrados");
-                } else {
-                    tvEstadisticasGenerales.setText(getString(R.string.msg_could_not_load_takes));
-                }
+                runOnUiThread(() -> {
+                    procesarInformacion();
+                    // Mostrar mensaje informativo en lugar de error
+                    if (todosLosMedicamentos.isEmpty()) {
+                        tvEstadisticasGenerales.setText("No hay medicamentos registrados");
+                    } else {
+                        tvEstadisticasGenerales.setText(getString(R.string.msg_could_not_load_takes));
+                    }
+                });
             }
         });
     }
@@ -253,19 +264,24 @@ public class HistorialActivity extends AppCompatActivity {
             return;
         }
 
-        // Con seguimiento: no ocasionales, activos, no pausados, no vencidos (el usuario los está tomando)
+        // Con seguimiento: medicamentos con tomas programadas en alguna parte de la semana (incl. programación por día)
         medicamentosConSeguimiento = new ArrayList<>();
         for (Medicamento med : todosLosMedicamentos) {
-            if (MedicamentoUtils.esMedicamentoOcasional(med)) continue;
-            if (!med.isActivo() || med.isPausado() || MedicamentoUtils.estaVencido(med)) continue;
-            medicamentosConSeguimiento.add(med);
+            if (MedicamentoUtils.tieneTomasProgramadasEnLaSemana(med)) {
+                medicamentosConSeguimiento.add(med);
+            }
         }
-        medicamentosConAdherencia = new ArrayList<>(medicamentosConSeguimiento);
-        // No vigentes: programados pero pausados, vencidos o inactivos
+        // Activos vigentes: con seguimiento y pueden marcarse como tomado (activo, no pausado, no vencido, con stock)
+        medicamentosConAdherencia = new ArrayList<>();
+        for (Medicamento med : medicamentosConSeguimiento) {
+            if (MedicamentoUtils.esActivoVigente(med)) {
+                medicamentosConAdherencia.add(med);
+            }
+        }
+        // No vigentes: con seguimiento pero no vigentes (vencido, sin stock, pausado o inactivo)
         List<Medicamento> noVigentes = new ArrayList<>();
-        for (Medicamento med : todosLosMedicamentos) {
-            if (MedicamentoUtils.esMedicamentoOcasional(med)) continue;
-            if (med.isPausado() || !med.isActivo() || MedicamentoUtils.estaVencido(med)) {
+        for (Medicamento med : medicamentosConSeguimiento) {
+            if (!MedicamentoUtils.esActivoVigente(med)) {
                 noVigentes.add(med);
             }
         }
@@ -279,28 +295,23 @@ public class HistorialActivity extends AppCompatActivity {
         tratamientosConcluidos = new ArrayList<>();
         medicamentosOcasionales = new ArrayList<>();
 
-        for (Medicamento medicamento : todosLosMedicamentos) {
+        for (Medicamento medicamento : medicamentosConSeguimiento) {
             List<Toma> tomasMedicamento = AdherenciaCalculator.filtrarTomasPorMedicamento(
                 tomasUsuario,
                 medicamento.getId());
-            if (MedicamentoUtils.esMedicamentoOcasional(medicamento)) {
-                if (!tomasMedicamento.isEmpty()) {
-                    medicamentosOcasionales.add(medicamento);
-                }
-                continue;
-            }
-
             resumenes.add(AdherenciaCalculator.calcularResumenGeneral(medicamento, tomasMedicamento));
-
             if (medicamento.isPausado() || !medicamento.isActivo() || MedicamentoUtils.estaVencido(medicamento)) {
                 tratamientosConcluidos.add(medicamento);
             }
         }
 
-        if (tratamientosConcluidos.isEmpty() && !todosLosMedicamentos.isEmpty()) {
-            for (Medicamento medicamento : todosLosMedicamentos) {
-                if (medicamento.getTomasDiarias() > 0) {
-                    tratamientosConcluidos.add(medicamento);
+        for (Medicamento medicamento : todosLosMedicamentos) {
+            if (MedicamentoUtils.esMedicamentoOcasional(medicamento)) {
+                List<Toma> tomasMedicamento = AdherenciaCalculator.filtrarTomasPorMedicamento(
+                    tomasUsuario,
+                    medicamento.getId());
+                if (!tomasMedicamento.isEmpty()) {
+                    medicamentosOcasionales.add(medicamento);
                 }
             }
         }
@@ -308,7 +319,10 @@ public class HistorialActivity extends AppCompatActivity {
         adapter.actualizarMedicamentos(tratamientosConcluidos);
         adapterOcasionales.actualizarMedicamentos(medicamentosOcasionales);
         if (adherenciaAdapter != null) {
-            adherenciaAdapter.actualizarDatos(medicamentosConAdherencia, tomasUsuario);
+            adherenciaAdapter.actualizarDatos(medicamentosConSeguimiento, tomasUsuario);
+            if (rvAdherenciaPorMedicamento != null) {
+                rvAdherenciaPorMedicamento.requestLayout();
+            }
         }
 
         // Sección ocasionales oculta en esta pantalla (solo stats + lista por medicamento)
@@ -402,7 +416,7 @@ public class HistorialActivity extends AppCompatActivity {
         medicamentosPlan.clear();
 
         for (Medicamento medicamento : todosLosMedicamentos) {
-            if (medicamento.getTomasDiarias() > 0 && medicamento.isActivo()) {
+            if (medicamento.isActivo() && MedicamentoUtils.tieneTomasProgramadasEnLaSemana(medicamento)) {
                 medicamentosPlan.add(medicamento);
             }
         }

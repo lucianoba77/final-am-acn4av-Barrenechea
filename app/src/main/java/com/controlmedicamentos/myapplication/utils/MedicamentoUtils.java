@@ -26,6 +26,40 @@ public final class MedicamentoUtils {
     }
 
     /**
+     * Indica si el medicamento tiene tomas programadas hoy (para dashboard/filtros del día).
+     */
+    public static boolean tieneTomasProgramadas(Medicamento med) {
+        if (med == null || esMedicamentoOcasional(med)) return false;
+        java.util.List<String> horarios = med.getHorariosTomasHoy();
+        return horarios != null && !horarios.isEmpty();
+    }
+
+    /**
+     * Indica si el medicamento tiene tomas programadas en alguna parte de la semana (seguimiento de adherencia).
+     * Incluye: programación por día con al menos un día con horarios, o lista de horarios, o tomas diarias + primera hora.
+     * Los únicos que quedan fuera del seguimiento son los que no tienen tomas programadas en toda la semana.
+     */
+    public static boolean tieneTomasProgramadasEnLaSemana(Medicamento med) {
+        if (med == null) return false;
+        if (med.tieneProgramacionConHorarios()) return true;
+        if (med.getHorariosTomas() != null && !med.getHorariosTomas().isEmpty()) return true;
+        if (med.getTomasDiarias() > 0 && med.getHorarioPrimeraToma() != null && !med.getHorarioPrimeraToma().isEmpty()) return true;
+        return false;
+    }
+
+    /**
+     * Indica si el medicamento está vigente para poder marcar como tomado:
+     * activo, no pausado, no vencido y con stock.
+     */
+    public static boolean esActivoVigente(Medicamento med) {
+        if (med == null) return false;
+        return med.isActivo()
+            && !med.isPausado()
+            && !estaVencido(med)
+            && (med.getStockActual() > 0);
+    }
+
+    /**
      * Indica si el medicamento está vencido (fecha de vencimiento &lt; hoy).
      * Compara solo la fecha (sin hora). Si no tiene fecha de vencimiento, no está vencido.
      */

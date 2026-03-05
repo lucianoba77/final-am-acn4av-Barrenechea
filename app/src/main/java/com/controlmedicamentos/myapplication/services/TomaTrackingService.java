@@ -461,9 +461,9 @@ public class TomaTrackingService {
             Calendar fechaToma = Calendar.getInstance();
             fechaToma.setTime(tomaEncontrada.getFechaHoraProgramada());
             
-            // Permitir marcar hasta 10 minutos antes (ventana de alerta amarilla)
+            // Misma ventana que Posponer: permitir marcar desde 30 min antes
             Calendar fechaLimiteAntes = (Calendar) fechaToma.clone();
-            fechaLimiteAntes.add(Calendar.MINUTE, -Constants.MINUTOS_ALERTA_AMARILLA);
+            fechaLimiteAntes.add(Calendar.MINUTE, -Constants.MINUTOS_POSPONER_ANTES);
             
             if (ahora.before(fechaLimiteAntes)) {
                 return "No se puede marcar como tomado antes de la hora programada. La toma está programada para " + 
@@ -552,9 +552,9 @@ public class TomaTrackingService {
                 }
             }
             
-            // Verificar que no sea más de 10 minutos antes
+            // Misma ventana que Posponer: desde 30 min antes hasta 1 h después (así Tomado y Posponer van juntos)
             Calendar fechaLimiteAntes = (Calendar) fechaToma.clone();
-            fechaLimiteAntes.add(Calendar.MINUTE, -Constants.MINUTOS_ALERTA_AMARILLA);
+            fechaLimiteAntes.add(Calendar.MINUTE, -Constants.MINUTOS_POSPONER_ANTES);
             if (ahora.before(fechaLimiteAntes)) {
                 continue; // Aún es muy temprano
             }
@@ -654,10 +654,45 @@ public class TomaTrackingService {
     }
 
     /**
+     * Indica si hay tomas pendientes de hoy cuyo horario programado aún no ha llegado.
+     * Si es true, la card debe mostrarse como "Activo" (verde), no "Omitido".
+     */
+    public boolean tieneTomasPendientesConHorarioEnElFuturo(String medicamentoId) {
+        List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
+        if (tomas == null || tomas.isEmpty()) {
+            return false;
+        }
+        Calendar ahora = Calendar.getInstance();
+        for (TomaProgramada toma : tomas) {
+            if (toma.isTomada()) {
+                continue;
+            }
+            Date fechaProgramada = toma.getFechaHoraProgramada();
+            if (fechaProgramada == null) {
+                continue;
+            }
+            Calendar fechaToma = Calendar.getInstance();
+            fechaToma.setTime(fechaProgramada);
+            if (fechaToma.get(Calendar.YEAR) != ahora.get(Calendar.YEAR) ||
+                fechaToma.get(Calendar.DAY_OF_YEAR) != ahora.get(Calendar.DAY_OF_YEAR)) {
+                continue;
+            }
+            if (!ahora.after(fechaToma)) {
+                return true; // Hay al menos una toma de hoy cuyo horario aún no ha pasado
+            }
+        }
+        return false;
+    }
+
+    /**
      * Indica si la próxima acción para el medicamento es mostrar "Omitido" (gris):
-     * hay tomas pendientes pero todas están omitidas y ya pasó la ventana para marcarlas como tomada.
+     * hay tomas pendientes pero ya pasó la hora (o la ventana) y no queda ninguna en el futuro.
+     * Si aún hay tomas con horario en el futuro hoy, se muestra "Activo" (verde).
      */
     public boolean tieneProximaOmitidaComoUnicaPendiente(String medicamentoId) {
+        if (tieneTomasPendientesConHorarioEnElFuturo(medicamentoId)) {
+            return false; // Aún no ha pasado la hora de alguna toma; mostrar Activo
+        }
         if (obtenerTomaProximaValida(medicamentoId) != null) {
             return false; // Hay una toma que se puede marcar como tomada
         }
@@ -667,7 +702,7 @@ public class TomaTrackingService {
         }
         for (TomaProgramada toma : tomas) {
             if (!toma.isTomada()) {
-                return true; // Hay al menos una no tomada (y no hay ninguna recuperable)
+                return true; // Hay al menos una no tomada (y no hay ninguna recuperable ni futura)
             }
         }
         return false;
@@ -715,6 +750,129 @@ public class TomaTrackingService {
      * @param medicamentoId El ID del medicamento.
      * @return La toma que puede posponerse, o null si no hay ninguna.
      */
+    /**
+     * Obtiene la toma programada de hoy para un horario dado (para acciones por franja).
+     */
+    public TomaProgramada getTomaProgramadaPorHorario(String medicamentoId, String horario) {
+        List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
+        if (tomas == null || horario == null) {
+            return null;
+        }
+        Calendar ahora = Calendar.getInstance();
+        for (TomaProgramada toma : tomas) {
+            if (!horario.equals(toma.getHorario())) {
+                continue;
+            }
+            Date f = toma.getFechaHoraProgramada();
+            if (f == null) continue;
+            Calendar fc = Calendar.getInstance();
+            fc.setTime(f);
+            if (fc.get(Calendar.YEAR) != ahora.get(Calendar.YEAR) ||
+                fc.get(Calendar.DAY_OF_YEAR) != ahora.get(Calendar.DAY_OF_YEAR)) {
+                continue;
+            }
+            return toma;
+        }
+        return null;
+    }
+
+    /**
+     * Cuenta las tomas pendientes para el resto del día: no tomadas y cuya ventana aún no pasó.
+     * Usado para el texto del botón "X Tomas pendientes" (solo las que siguen pendientes, no el total del día).
+     */
+    public int contarTomasPendientesRestoDia(String medicamentoId) {
+        List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
+        if (tomas == null || tomas.isEmpty()) {
+            return 0;
+        }
+        Calendar ahora = Calendar.getInstance();
+        int count = 0;
+        for (TomaProgramada toma : tomas) {
+            if (toma.isTomada()) {
+                continue;
+            }
+            Date f = toma.getFechaHoraProgramada();
+            if (f == null) continue;
+            Calendar fc = Calendar.getInstance();
+            fc.setTime(f);
+            if (fc.get(Calendar.YEAR) != ahora.get(Calendar.YEAR) ||
+                fc.get(Calendar.DAY_OF_YEAR) != ahora.get(Calendar.DAY_OF_YEAR)) {
+                continue;
+            }
+            if (!yaPasóVentanaParaMarcar(medicamentoId, toma.getHorario())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Indica si ya pasó la ventana para marcar la toma (más de 1 h después del horario + posposiciones).
+     * Si es true y la toma no está tomada, la línea debe mostrarse en rojo (pospuesta/omitida).
+     */
+    public boolean yaPasóVentanaParaMarcar(String medicamentoId, String horario) {
+        TomaProgramada toma = getTomaProgramadaPorHorario(medicamentoId, horario);
+        if (toma == null || toma.isTomada()) {
+            return false;
+        }
+        Date f = toma.getFechaHoraProgramada();
+        if (f == null) return false;
+        Calendar ahora = Calendar.getInstance();
+        Calendar hasta = Calendar.getInstance();
+        hasta.setTime(f);
+        hasta.add(Calendar.HOUR_OF_DAY, Constants.HORAS_OMITIDA);
+        if (toma.getPosposiciones() > 0) {
+            hasta.add(Calendar.MINUTE, toma.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
+        }
+        return ahora.after(hasta);
+    }
+
+    /**
+     * Indica si la toma del horario dado está en la ventana para marcarla como tomada (10 min antes hasta 1 h después).
+     */
+    public boolean estaTomaEnVentanaParaMarcar(String medicamentoId, String horario) {
+        TomaProgramada toma = getTomaProgramadaPorHorario(medicamentoId, horario);
+        if (toma == null || toma.isTomada()) {
+            return false;
+        }
+        Date f = toma.getFechaHoraProgramada();
+        if (f == null) return false;
+        Calendar ahora = Calendar.getInstance();
+        Calendar fechaToma = Calendar.getInstance();
+        fechaToma.setTime(f);
+        Calendar desde = (Calendar) fechaToma.clone();
+        desde.add(Calendar.MINUTE, -Constants.MINUTOS_POSPONER_ANTES);
+        Calendar hasta = (Calendar) fechaToma.clone();
+        hasta.add(Calendar.HOUR_OF_DAY, Constants.HORAS_OMITIDA);
+        if (toma.getPosposiciones() > 0) {
+            hasta.add(Calendar.MINUTE, toma.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
+        }
+        return !ahora.before(desde) && !ahora.after(hasta);
+    }
+
+    /**
+     * Indica si la toma del horario dado puede posponerse (ventana 30 min antes hasta 1 h después).
+     */
+    public boolean puedePosponerToma(String medicamentoId, String horario) {
+        TomaProgramada toma = getTomaProgramadaPorHorario(medicamentoId, horario);
+        if (toma == null || toma.isTomada() || toma.getEstado() == TomaProgramada.EstadoTomaProgramada.OMITIDA) {
+            return false;
+        }
+        Date f = toma.getFechaHoraProgramada();
+        if (f == null) return false;
+        Calendar ahora = Calendar.getInstance();
+        Calendar fechaToma = Calendar.getInstance();
+        fechaToma.setTime(f);
+        Calendar desde = (Calendar) fechaToma.clone();
+        desde.add(Calendar.MINUTE, -Constants.MINUTOS_POSPONER_ANTES);
+        Calendar hasta = (Calendar) fechaToma.clone();
+        hasta.add(Calendar.HOUR_OF_DAY, Constants.HORAS_OMITIDA);
+        if (toma.getPosposiciones() > 0) {
+            hasta.add(Calendar.MINUTE, toma.getPosposiciones() * Constants.MINUTOS_POSPOSICION);
+        }
+        return !ahora.before(desde) && !ahora.after(hasta);
+    }
+
     public TomaProgramada obtenerTomaPosponible(String medicamentoId) {
         List<TomaProgramada> tomas = tomasPorMedicamento.get(medicamentoId);
         if (tomas == null || tomas.isEmpty()) {

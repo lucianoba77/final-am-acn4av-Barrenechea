@@ -110,5 +110,30 @@ public class UIHelper {
         // Forzar aplicación inmediata de insets
         ViewCompat.requestApplyInsets(headerLayout);
     }
+
+    /**
+     * Aplica window insets a la barra de navegación inferior para que el texto e íconos
+     * no queden solapados por los botones de navegación del sistema (o la barra de gestos).
+     * Añade padding inferior igual a la altura de la barra de navegación del sistema.
+     *
+     * @param barraNavegacion Vista raíz de la barra de navegación inferior (ej. findViewById(R.id.barraNavegacion)).
+     */
+    public static void aplicarInsetsBarraNavegacionInferior(View barraNavegacion) {
+        if (barraNavegacion == null) {
+            return;
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(barraNavegacion, (v, insets) -> {
+            int insetBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+            v.setPadding(
+                v.getPaddingLeft(),
+                v.getPaddingTop(),
+                v.getPaddingRight(),
+                v.getPaddingBottom() + insetBottom
+            );
+            v.requestLayout();
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(barraNavegacion);
+    }
 }
 

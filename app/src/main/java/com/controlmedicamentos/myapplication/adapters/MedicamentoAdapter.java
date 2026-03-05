@@ -37,6 +37,9 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
         void onTomadoClick(Medicamento medicamento);
         void onMedicamentoClick(Medicamento medicamento);
         void onPosponerClick(Medicamento medicamento);
+        /** Por franja horaria (desde la fila de cada toma). */
+        void onTomadoHorarioClick(Medicamento medicamento, String horario);
+        void onPosponerHorarioClick(Medicamento medicamento, String horario);
     }
 
     public MedicamentoAdapter(Context context, List<Medicamento> medicamentos) {
@@ -126,10 +129,6 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
         }
 
         public void bind(Medicamento medicamento) {
-            // Color de la card igual al asignado en el Botiquín
-            if (itemView instanceof MaterialCardView) {
-                ((MaterialCardView) itemView).setCardBackgroundColor(medicamento.getColor());
-            }
             // Configurar información básica
             tvNombreMedicamento.setText(medicamento.getNombre());
             tvInfoMedicamento.setText(medicamento.getPresentacion() + " • " +
@@ -183,6 +182,11 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
             boolean mostrarOmitido = trackingService.tieneProximaOmitidaComoUnicaPendiente(medicamento.getId());
             boolean todasTomadas = trackingService.completoTodasLasTomasDelDia(medicamento.getId());
 
+            // Color de la card: siempre el mismo que en el Botiquín (no verde)
+            if (itemView instanceof MaterialCardView) {
+                ((MaterialCardView) itemView).setCardBackgroundColor(medicamento.getColor());
+            }
+
             configurarBarrasTomas(medicamento, trackingService);
 
             boolean estaVencido = medicamento.estaVencido();
@@ -206,9 +210,15 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
                     llFilaBotones.setVisibility(View.VISIBLE);
                 }
 
-                // Botón Posponer: visible 30 min antes hasta 1 h después de la toma
+                // En franja horaria: Posponer (o Pospuesto) + Tomado. Fuera de franja: solo "X Tomas pendientes".
+                TomaProgramada tomaEnVentana = trackingService.obtenerTomaProximaValida(medicamento.getId());
+                boolean hayTomaEnVentana = tomaEnVentana != null;
+                boolean tomaPospuesta = tomaEnVentana != null && tomaEnVentana.getPosposiciones() > 0;
+                boolean enFranjaHoraria = tieneTomasPosponibles || hayTomaEnVentana;
                 if (btnPosponer != null) {
-                    btnPosponer.setVisibility(tieneTomasPosponibles ? View.VISIBLE : View.GONE);
+                    btnPosponer.setVisibility(enFranjaHoraria ? View.VISIBLE : View.GONE);
+                    btnPosponer.setText(tomaPospuesta ? R.string.btn_pospuesto : R.string.btn_posponer);
+                    btnPosponer.setEnabled(tomaEnVentana == null || tomaEnVentana.getPosposiciones() < 3);
                     btnPosponer.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
@@ -219,10 +229,11 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
                     });
                 }
 
-                // Botón principal: "Tomado" (verde activo), "Omitido" (gris desactivado) o Tomado desactivado (todas tomadas)
+                // Botón derecho: en ventana → "Tomado" (verde); fuera de ventana → "X Tomas pendientes"; todas tomadas → "Tomado" (verde)
+                int cantPendientesRestoDia = trackingService.contarTomasPendientesRestoDia(medicamento.getId());
                 if (todasTomadas) {
                     btnTomado.setText(R.string.medicine_taken);
-                    btnTomado.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.button_omitido));
+                    btnTomado.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.success));
                     btnTomado.setEnabled(false);
                     btnTomado.setOnClickListener(null);
                 } else if (mostrarOmitido) {
@@ -231,17 +242,24 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
                     btnTomado.setEnabled(false);
                     btnTomado.setOnClickListener(null);
                 } else {
-                    btnTomado.setText(R.string.medicine_taken);
-                    btnTomado.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.success));
-                    btnTomado.setEnabled(true);
-                    btnTomado.setOnClickListener(new View.OnClickListener() {
-                        @Override
-                        public void onClick(View v) {
-                            if (listener != null) {
-                                listener.onTomadoClick(medicamento);
+                    if (hayTomaEnVentana) {
+                        btnTomado.setText(R.string.medicine_taken);
+                        btnTomado.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.success));
+                        btnTomado.setEnabled(true);
+                        btnTomado.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                if (listener != null) {
+                                    listener.onTomadoClick(medicamento);
+                                }
                             }
-                        }
-                    });
+                        });
+                    } else {
+                        btnTomado.setText(context.getString(R.string.tomas_pendientes_count, cantPendientesRestoDia));
+                        btnTomado.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.success));
+                        btnTomado.setEnabled(false);
+                        btnTomado.setOnClickListener(null);
+                    }
                 }
             }
 
@@ -313,21 +331,22 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
                         break;
                     }
                 }
-                int colorResId = obtenerColorEstadoToma(tomaParaBarra);
+                int colorResId = obtenerColorEstadoToma(medicamento.getId(), horario, tomaParaBarra, trackingService);
                 barra.setProgressTintList(ContextCompat.getColorStateList(context, colorResId));
 
                 fila.addView(tvHorario);
                 fila.addView(barra);
+
                 llBarrasTomas.addView(fila);
             }
         }
 
         /**
-         * Color de la barra: verde si la toma fue marcada como tomada;
-         * rojo solo si está omitida; gris (pendiente) en el resto.
+         * Color de la línea (bandera): verde si tomada; rojo si omitida o pasó la ventana; amarillo si está en ventana de la toma; gris si pendiente (futuro).
+         * Solo la línea indica el estado, sin botones ni carteles en la fila.
          */
-        private int obtenerColorEstadoToma(TomaProgramada toma) {
-            if (toma == null) {
+        private int obtenerColorEstadoToma(String medicamentoId, String horario, TomaProgramada toma, TomaTrackingService trackingService) {
+            if (toma == null || trackingService == null) {
                 return R.color.barra_pendiente;
             }
             if (toma.isTomada()) {
@@ -335,6 +354,12 @@ public class MedicamentoAdapter extends RecyclerView.Adapter<MedicamentoAdapter.
             }
             if (toma.getEstado() == TomaProgramada.EstadoTomaProgramada.OMITIDA) {
                 return R.color.barra_omitida;
+            }
+            if (trackingService.yaPasóVentanaParaMarcar(medicamentoId, horario)) {
+                return R.color.barra_omitida;
+            }
+            if (trackingService.estaTomaEnVentanaParaMarcar(medicamentoId, horario)) {
+                return R.color.barra_alerta_amarilla;
             }
             return R.color.barra_pendiente;
         }

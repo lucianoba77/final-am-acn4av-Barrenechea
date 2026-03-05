@@ -68,6 +68,10 @@ public class AjustesActivity extends AppCompatActivity {
         if (headerLayout != null) {
             headerLayout.post(() -> aplicarWindowInsets(headerLayout));
         }
+        View barraNav = findViewById(R.id.barraNavegacion);
+        if (barraNav != null) {
+            com.controlmedicamentos.myapplication.utils.UIHelper.aplicarInsetsBarraNavegacionInferior(barraNav);
+        }
 
         // Inicializar servicios primero
         authService = new com.controlmedicamentos.myapplication.services.AuthService();

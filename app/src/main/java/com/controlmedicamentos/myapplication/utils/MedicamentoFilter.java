@@ -17,8 +17,8 @@ public class MedicamentoFilter {
 
     /**
      * Filtra medicamentos para mostrar en el dashboard.
-     * Incluye todos los medicamentos activos que tienen tomas programadas para el día actual,
-     * sin importar si ya se tomaron todas las tomas o se saltaron algunas.
+     * Solo medicamentos que están en Botiquín, con tomas programadas y con al menos una toma para el día actual.
+     * Incluye vencidos y sin stock para que el usuario sepa que tiene que tomar ese medicamento hoy.
      * 
      * @param medicamentos Lista completa de medicamentos
      * @param trackingService Servicio de tracking de tomas
@@ -86,13 +86,9 @@ public class MedicamentoFilter {
 
     /**
      * Verifica si un medicamento cumple las condiciones básicas para aparecer en el dashboard.
+     * No se exige isActivo(): el usuario debe ver también vencidos/sin stock para saber que tiene que tomar ese medicamento hoy.
      */
     private static boolean cumpleCondicionesBasicas(Medicamento med) {
-        if (!med.isActivo()) {
-            Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: no está activo");
-            return false;
-        }
-
         if (med.getTomasDiarias() <= 0) {
             Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: tomasDiarias <= 0");
             return false;

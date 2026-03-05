@@ -366,12 +366,7 @@ public class Medicamento {
             int diaIndex = getDiaSemanaIndex0a6();
             List<String> horarios = programacionPersonalizada.get(diaIndex);
             if (horarios == null || horarios.isEmpty()) {
-                // Sin horarios guardados para este día: usar horario por defecto (primera toma + tomas diarias)
-                if (tomasDiarias > 0 && horarioPrimeraToma != null && !horarioPrimeraToma.isEmpty()) {
-                    List<String> porDefecto = obtenerHorariosPorDefecto();
-                    Collections.sort(porDefecto, String::compareTo);
-                    return porDefecto;
-                }
+                // Con programación por día: si hoy no tiene horarios configurados, no hay tomas hoy (no usar por defecto)
                 return new ArrayList<>();
             }
             List<String> copia = new ArrayList<>(horarios);
@@ -419,11 +414,6 @@ public class Medicamento {
         if (usarProgramacionPersonalizada && programacionPersonalizada != null && !programacionPersonalizada.isEmpty()) {
             List<String> horarios = programacionPersonalizada.get(diaSemana0a6);
             if (horarios == null || horarios.isEmpty()) {
-                if (tomasDiarias > 0 && horarioPrimeraToma != null && !horarioPrimeraToma.isEmpty()) {
-                    List<String> porDefecto = obtenerHorariosPorDefecto();
-                    Collections.sort(porDefecto, String::compareTo);
-                    return porDefecto;
-                }
                 return new ArrayList<>();
             }
             List<String> copia = new ArrayList<>(horarios);

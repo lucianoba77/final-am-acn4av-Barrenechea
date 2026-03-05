@@ -35,6 +35,12 @@
     <color name="barra_retraso">#F44336</color>
     <color name="barra_omitida">#D32F2F</color>
 
+    <!-- Card activo no vigente (vencido, pausado o sin stock) en Adhesión -->
+    <color name="card_adhesion_no_vigente">#E8E8E8</color>
+
+    <!-- Fondo de card cuando el medicamento está activo (tomas aún no pasaron hoy) -->
+    <color name="card_activo_fondo">#E8F5E9</color>
+
     <!-- Colores de estado -->
     <color name="success">#4CAF50</color>
     <color name="success_dark">#2E7D32</color>
