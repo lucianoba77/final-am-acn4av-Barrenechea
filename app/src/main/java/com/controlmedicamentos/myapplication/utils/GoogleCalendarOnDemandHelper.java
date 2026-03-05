@@ -108,8 +108,7 @@ public class GoogleCalendarOnDemandHelper {
      */
     private void iniciarOAuth(String action) {
         try {
-            String clientId = activity.getString(activity.getResources()
-                .getIdentifier("default_web_client_id", "string", activity.getPackageName()));
+            String clientId = com.controlmedicamentos.myapplication.BuildConfig.WEB_CLIENT_ID;
             
             if (clientId == null || clientId.isEmpty()) {
                 Toast.makeText(activity, 

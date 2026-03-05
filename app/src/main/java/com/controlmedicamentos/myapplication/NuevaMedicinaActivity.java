@@ -23,10 +23,12 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.controlmedicamentos.myapplication.R;
 import com.controlmedicamentos.myapplication.models.Medicamento;
+import com.controlmedicamentos.myapplication.models.Toma;
 import com.controlmedicamentos.myapplication.services.AuthService;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.services.GoogleCalendarAuthService;
@@ -41,6 +43,7 @@ import com.controlmedicamentos.myapplication.utils.ErrorHandler;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +55,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     private MaterialButton btnGuardar, btnSeleccionarColor, btnFechaVencimiento, btnCancelarAccion;
     private MaterialButton btnSeleccionarHora;
     // Botones de navegación
-    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
+    private View btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     private android.widget.Spinner spinnerPresentacion;
     private TextInputEditText etTomasDiarias, etStockInicial, etDiasTratamiento;
     private TextInputLayout tilTomasDiarias, tilStockInicial, tilDiasTratamiento;
@@ -68,9 +71,14 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
     private boolean esEdicion = false;
 
     private CheckBox checkUsarProgramacionPersonalizada;
+    private MaterialSwitch switchEsCronico;
     private LinearLayout programacionDiasContainer;
     /** Horarios por día de la semana (0=Domingo .. 6=Sábado). Se rellena al marcar "programación personalizada". */
     private final List<List<String>> horariosPorDia = new ArrayList<>();
+    /** Horarios adicionales del día (sin programación por día). La primera toma es horaSeleccionada; el resto va aquí. */
+    private final List<String> horariosAdicionales = new ArrayList<>();
+    private LinearLayout containerHorariosAdicionales;
+    private MaterialButton btnAgregarToma;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -141,7 +149,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         tilTomasDiarias = findViewById(R.id.tilTomasDiarias);
         tilStockInicial = findViewById(R.id.tilStockInicial);
         tilDiasTratamiento = findViewById(R.id.tilDiasTratamiento);
-        
+        switchEsCronico = findViewById(R.id.switchEsCronico);
+
         // Botones de navegación
         btnNavHome = findViewById(R.id.btnNavHome);
         btnNavNuevaMedicina = findViewById(R.id.btnNavNuevaMedicina);
@@ -151,6 +160,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
 
         checkUsarProgramacionPersonalizada = findViewById(R.id.checkUsarProgramacionPersonalizada);
         programacionDiasContainer = findViewById(R.id.programacionDiasContainer);
+        containerHorariosAdicionales = findViewById(R.id.containerHorariosAdicionales);
+        btnAgregarToma = findViewById(R.id.btnAgregarToma);
         for (int i = 0; i < 7; i++) {
             horariosPorDia.add(new ArrayList<>());
         }
@@ -193,6 +204,61 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 construirFilasProgramacion();
             }
         });
+
+        switchEsCronico.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            tilDiasTratamiento.setEnabled(!isChecked);
+            etDiasTratamiento.setEnabled(!isChecked);
+            if (isChecked) {
+                etDiasTratamiento.setText("");
+            }
+        });
+
+        btnAgregarToma.setOnClickListener(v -> mostrarSelectorHoraAdicional());
+    }
+
+    /** Muestra el selector de hora para agregar una toma adicional (mismo día, todos los días o duración del tratamiento). */
+    private void mostrarSelectorHoraAdicional() {
+        TimePickerDialog dlg = new TimePickerDialog(this, (view, hourOfDay, minute) -> {
+            String h = String.format("%02d:%02d", hourOfDay, minute);
+            if (horaSeleccionada != null && h.equals(horaSeleccionada)) {
+                Toast.makeText(this, getString(R.string.msg_horario_ya_primera_toma), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (horariosAdicionales.contains(h)) {
+                Toast.makeText(this, getString(R.string.msg_horario_ya_agregado), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            horariosAdicionales.add(h);
+            Collections.sort(horariosAdicionales, String::compareTo);
+            refrescarContainerHorariosAdicionales();
+            actualizarTomasDiariasDesdeHorarios();
+        }, 14, 0, true);
+        dlg.show();
+    }
+
+    private void refrescarContainerHorariosAdicionales() {
+        if (containerHorariosAdicionales == null) return;
+        containerHorariosAdicionales.removeAllViews();
+        for (String horario : horariosAdicionales) {
+            View row = LayoutInflater.from(this).inflate(R.layout.item_horario_adicional, containerHorariosAdicionales, false);
+            TextView tvHorario = row.findViewById(R.id.tvHorarioAdicional);
+            View btnQuitar = row.findViewById(R.id.btnQuitarHorario);
+            if (tvHorario != null) tvHorario.setText(horario);
+            String h = horario;
+            if (btnQuitar != null) btnQuitar.setOnClickListener(v -> {
+                horariosAdicionales.remove(h);
+                refrescarContainerHorariosAdicionales();
+                actualizarTomasDiariasDesdeHorarios();
+            });
+            containerHorariosAdicionales.addView(row);
+        }
+    }
+
+    private void actualizarTomasDiariasDesdeHorarios() {
+        int total = (horaSeleccionada != null && !horaSeleccionada.isEmpty() ? 1 : 0) + horariosAdicionales.size();
+        if (etTomasDiarias != null && total > 0) {
+            etTomasDiarias.setText(String.valueOf(total));
+        }
     }
 
     private static final int[] IDS_NOMBRES_DIA = {
@@ -304,23 +370,19 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             case "Comprimidos":
             case "Cápsulas":
                 tilStockInicial.setHint("Cantidad de comprimidos");
-                etStockInicial.setHint(String.valueOf(Constants.STOCK_DEFAULT_COMPRIMIDOS));
                 break;
             case "Jarabe":
             case "Inyección":
                 tilStockInicial.setHint("Días estimados de duración");
-                etStockInicial.setHint(String.valueOf(Constants.DIAS_DEFAULT_JARABE));
                 break;
             case "Crema":
             case "Pomada":
             case "Parche":
                 tilStockInicial.setHint("Días estimados de duración");
-                etStockInicial.setHint(String.valueOf(Constants.DIAS_DEFAULT_CREMA));
                 break;
             case "Spray nasal":
             case "Gotas":
                 tilStockInicial.setHint("Días estimados de duración");
-                etStockInicial.setHint(String.valueOf(Constants.DIAS_DEFAULT_SPRAY));
                 break;
         }
     }
@@ -328,7 +390,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         if (validarFormulario()) {
             // Verificar conexión a internet
             if (!NetworkUtils.isNetworkAvailable(this)) {
-                Toast.makeText(this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.msg_no_internet), Toast.LENGTH_LONG).show();
                 return;
             }
 
@@ -337,15 +399,15 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 medicamento = crearMedicamento();
             } catch (Exception e) {
                 Logger.e("NuevaMedicinaActivity", "Error al crear medicamento", e);
-                Toast.makeText(this, "Error al crear el medicamento: " + 
-                    (e.getMessage() != null ? e.getMessage() : "Error desconocido"), 
+                Toast.makeText(this, getString(R.string.msg_error_creating_medicine,
+                    e.getMessage() != null ? e.getMessage() : getString(R.string.error_unknown)),
                     Toast.LENGTH_LONG).show();
                 return;
             }
             
             if (medicamento == null) {
                 Logger.e("NuevaMedicinaActivity", "Medicamento es null después de crearMedicamento()");
-                Toast.makeText(this, "Error: No se pudo crear el medicamento", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.msg_error_could_not_create_medicine), Toast.LENGTH_LONG).show();
                 return;
             }
 
@@ -355,43 +417,52 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 
                 // En edición, si el usuario cambió el stock (campo Stock Inicial),
                 // mantener el stockActual como está si no se cambió explícitamente
-                // Pero si se cambió stockInicial, actualizar stockActual al nuevo valor
-                // (lógica de React: si se actualiza stockInicial y stockActual no está definido, usar stockInicial)
                 int nuevoStockInicial = medicamento.getStockInicial();
                 int stockInicialAnterior = medicamentoEditar.getStockInicial();
-                
                 if (nuevoStockInicial != stockInicialAnterior) {
-                    // Si se cambió stockInicial, y el stockActual es el mismo que antes,
-                    // significa que no se actualizó explícitamente, mantener el stockActual actual
                     if (medicamento.getStockActual() == medicamentoEditar.getStockActual()) {
-                        // Mantener el stockActual como está (no actualizar al nuevo stockInicial)
                         medicamento.setStockActual(medicamentoEditar.getStockActual());
                     }
-                    // Si stockActual cambió, usar el nuevo valor
                 } else {
-                    // Si no se cambió stockInicial, mantener stockActual igual
                     medicamento.setStockActual(medicamentoEditar.getStockActual());
                 }
-                
-                // Pasar contexto para gestionar Google Calendar si se pausa/reactiva
-                firebaseService.actualizarMedicamento(medicamento, NuevaMedicinaActivity.this, new FirebaseService.FirestoreCallback() {
-                    @Override
-                    public void onSuccess(Object result) {
-                        // Programar alarmas para el medicamento actualizado
-                        if (result instanceof Medicamento) {
-                            Medicamento medicamentoActualizado = (Medicamento) result;
-                            AlarmScheduler alarmScheduler = new AlarmScheduler(NuevaMedicinaActivity.this);
-                            alarmScheduler.programarAlarmasMedicamento(medicamentoActualizado);
-                        }
-                        Toast.makeText(NuevaMedicinaActivity.this, "Medicamento actualizado exitosamente", Toast.LENGTH_SHORT).show();
-                        irAMainActivity(); // Redirigir al dashboard
-                    }
 
-                    @Override
-                    public void onError(Exception exception) {
-                        ErrorHandler.handleError(NuevaMedicinaActivity.this, exception, "NuevaMedicinaActivity");
-                    }
-                });
+                // Si cambió la programación/horarios, comprobar si hoy ya tiene una toma registrada como tomada
+                boolean horariosCambiaron = horariosCambiaronRespectoA(medicamento, medicamentoEditar);
+                if (horariosCambiaron) {
+                    firebaseService.obtenerTomasUsuario(new FirebaseService.FirestoreListCallback() {
+                        @Override
+                        public void onSuccess(List<?> tomasResult) {
+                            boolean tieneTomaTomadaHoy = false;
+                            if (tomasResult != null) {
+                                Calendar hoy = Calendar.getInstance();
+                                for (Object o : tomasResult) {
+                                    if (!(o instanceof Toma)) continue;
+                                    Toma t = (Toma) o;
+                                    if (!medicamento.getId().equals(t.getMedicamentoId()) || t.getEstado() != Toma.EstadoToma.TOMADA) continue;
+                                    Date f = t.getFechaHoraTomada() != null ? t.getFechaHoraTomada() : t.getFechaHoraProgramada();
+                                    if (f == null) continue;
+                                    Calendar cal = Calendar.getInstance();
+                                    cal.setTime(f);
+                                    if (cal.get(Calendar.YEAR) == hoy.get(Calendar.YEAR) && cal.get(Calendar.DAY_OF_YEAR) == hoy.get(Calendar.DAY_OF_YEAR)) {
+                                        tieneTomaTomadaHoy = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (tieneTomaTomadaHoy) {
+                                Toast.makeText(NuevaMedicinaActivity.this, R.string.msg_horario_cambio_toma_ya_tomada, Toast.LENGTH_LONG).show();
+                            }
+                            ejecutarActualizarMedicamento(medicamento);
+                        }
+                        @Override
+                        public void onError(Exception exception) {
+                            ejecutarActualizarMedicamento(medicamento);
+                        }
+                    });
+                } else {
+                    ejecutarActualizarMedicamento(medicamento);
+                }
             } else {
                 // Crear nuevo medicamento
                 firebaseService.guardarMedicamento(medicamento, new FirebaseService.FirestoreCallback() {
@@ -406,7 +477,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                             // Sincronizar con Google Calendar si está conectado
                             sincronizarConGoogleCalendar(medicamentoGuardado);
                         }
-                        Toast.makeText(NuevaMedicinaActivity.this, "Medicamento guardado exitosamente", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(NuevaMedicinaActivity.this, getString(R.string.msg_medicine_saved), Toast.LENGTH_SHORT).show();
                         irAMainActivity(); // Redirigir al dashboard
                     }
 
@@ -419,6 +490,43 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         }
     }
     
+    /**
+     * Indica si los horarios de toma cambiaron respecto al medicamento editado (orden o valores).
+     */
+    private boolean horariosCambiaronRespectoA(Medicamento nuevo, Medicamento anterior) {
+        List<String> a = nuevo.getHorariosTomas() != null ? new ArrayList<>(nuevo.getHorariosTomas()) : new ArrayList<>();
+        List<String> b = anterior.getHorariosTomas() != null ? new ArrayList<>(anterior.getHorariosTomas()) : new ArrayList<>();
+        if (a.size() != b.size()) return true;
+        Collections.sort(a, String::compareTo);
+        Collections.sort(b, String::compareTo);
+        for (int i = 0; i < a.size(); i++) {
+            if (!a.get(i).equals(b.get(i))) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Ejecuta la actualización del medicamento en Firestore (usado en edición).
+     */
+    private void ejecutarActualizarMedicamento(Medicamento medicamento) {
+        firebaseService.actualizarMedicamento(medicamento, NuevaMedicinaActivity.this, new FirebaseService.FirestoreCallback() {
+            @Override
+            public void onSuccess(Object result) {
+                if (result instanceof Medicamento) {
+                    Medicamento medicamentoActualizado = (Medicamento) result;
+                    AlarmScheduler alarmScheduler = new AlarmScheduler(NuevaMedicinaActivity.this);
+                    alarmScheduler.programarAlarmasMedicamento(medicamentoActualizado);
+                }
+                Toast.makeText(NuevaMedicinaActivity.this, getString(R.string.msg_medicine_updated), Toast.LENGTH_SHORT).show();
+                irAMainActivity();
+            }
+            @Override
+            public void onError(Exception exception) {
+                ErrorHandler.handleError(NuevaMedicinaActivity.this, exception, "NuevaMedicinaActivity");
+            }
+        });
+    }
+
     /**
      * Redirige al dashboard (MainActivity)
      */
@@ -458,15 +566,19 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         setTitle("Editar Medicamento");
         
         // Actualizar texto del botón
-        btnGuardar.setText("Guardar Cambios");
+        btnGuardar.setText(getString(R.string.btn_guardar_cambios));
         
         etNombre.setText(medicamento.getNombre());
         etAfeccion.setText(medicamento.getAfeccion());
         etDetalles.setText(medicamento.getDetalles());
         etTomasDiarias.setText(String.valueOf(medicamento.getTomasDiarias()));
         etStockInicial.setText(String.valueOf(medicamento.getStockActual())); // Mostrar stock actual, no inicial
-        etDiasTratamiento.setText(medicamento.getDiasTratamiento() == -1 ? "" : String.valueOf(medicamento.getDiasTratamiento()));
-        
+        boolean esCronico = medicamento.getDiasTratamiento() == -1;
+        switchEsCronico.setChecked(esCronico);
+        tilDiasTratamiento.setEnabled(!esCronico);
+        etDiasTratamiento.setEnabled(!esCronico);
+        etDiasTratamiento.setText(esCronico ? "" : String.valueOf(medicamento.getDiasTratamiento()));
+
         // Seleccionar presentación en el spinner
         String presentacion = medicamento.getPresentacion();
         String[] presentaciones = {
@@ -480,18 +592,6 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
         }
         
-        // Configurar horario (si tiene tomas diarias > 0)
-        if (medicamento.getTomasDiarias() > 0 && medicamento.getHorarioPrimeraToma() != null 
-            && !medicamento.getHorarioPrimeraToma().isEmpty() 
-            && !medicamento.getHorarioPrimeraToma().equals(Constants.HORARIO_INVALIDO)) {
-            horaSeleccionada = medicamento.getHorarioPrimeraToma();
-            btnSeleccionarHora.setText(horaSeleccionada);
-        } else if (medicamento.getTomasDiarias() == 0) {
-            // Si es medicamento ocasional, deshabilitar selector de hora
-            btnSeleccionarHora.setText("No aplica (medicamento ocasional)");
-            btnSeleccionarHora.setEnabled(false);
-        }
-        
         // Programación personalizada por día
         if (medicamento.isUsarProgramacionPersonalizada() && medicamento.getProgramacionPersonalizada() != null) {
             for (int d = 0; d < 7; d++) {
@@ -501,6 +601,8 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
             checkUsarProgramacionPersonalizada.setChecked(true);
             programacionDiasContainer.setVisibility(View.VISIBLE);
+            horariosAdicionales.clear();
+            refrescarContainerHorariosAdicionales();
             if (programacionDiasContainer.getChildCount() == 0) {
                 construirFilasProgramacion();
             } else {
@@ -508,6 +610,21 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                     View row = programacionDiasContainer.getChildAt(d);
                     refrescarHorariosDia(d, row.findViewById(R.id.containerHorariosDia));
                 }
+            }
+        } else {
+            // Sin programación por día: cargar primera toma + horarios adicionales
+            horariosAdicionales.clear();
+            if (medicamento.getTomasDiarias() > 0 && medicamento.getHorariosTomas() != null && !medicamento.getHorariosTomas().isEmpty()) {
+                List<String> horarios = medicamento.getHorariosTomas();
+                horaSeleccionada = horarios.get(0);
+                btnSeleccionarHora.setText(horaSeleccionada);
+                for (int i = 1; i < horarios.size(); i++) {
+                    horariosAdicionales.add(horarios.get(i));
+                }
+                refrescarContainerHorariosAdicionales();
+            } else if (medicamento.getTomasDiarias() == 0) {
+                btnSeleccionarHora.setText(getString(R.string.btn_no_aplica_ocasional));
+                btnSeleccionarHora.setEnabled(false);
             }
         }
 
@@ -577,7 +694,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             // Si tiene tomas diarias, requiere horario
             if (TextUtils.isEmpty(btnSeleccionarHora.getText()) || 
                 btnSeleccionarHora.getText().toString().equals("Seleccionar hora")) {
-                Toast.makeText(this, "Debe seleccionar una hora para medicamentos con tomas diarias", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.msg_select_time_daily_doses), Toast.LENGTH_SHORT).show();
                 valido = false;
             }
         }
@@ -595,7 +712,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
                 if (stockInicial > 0) {
                     // Si tiene stock, DEBE tener fecha de vencimiento
                     if (fechaVencimiento == null) {
-                        Toast.makeText(this, "Los medicamentos con stock deben tener fecha de vencimiento", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, getString(R.string.msg_stock_requires_expiration), Toast.LENGTH_LONG).show();
                         valido = false;
                     }
                 }
@@ -617,19 +734,25 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         Object selectedItem = spinnerPresentacion.getSelectedItem();
         String presentacion = selectedItem != null ? selectedItem.toString() : "Comprimidos";
         
-        // Obtener tomas diarias (puede estar vacío para medicamentos ocasionales)
-        int tomasDiarias = 0;
-        if (!TextUtils.isEmpty(etTomasDiarias.getText())) {
+        // Construir lista de horarios: primera toma + adicionales (sin programación por día)
+        List<String> listaHorarios = new ArrayList<>();
+        if (horaSeleccionada != null && !horaSeleccionada.isEmpty()) {
+            listaHorarios.add(horaSeleccionada);
+        }
+        if (horariosAdicionales != null) {
+            listaHorarios.addAll(horariosAdicionales);
+        }
+        Collections.sort(listaHorarios, String::compareTo);
+
+        int tomasDiarias = listaHorarios.isEmpty() ? 0 : listaHorarios.size();
+        if (tomasDiarias == 0 && !TextUtils.isEmpty(etTomasDiarias.getText())) {
             try {
                 tomasDiarias = Integer.parseInt(etTomasDiarias.getText().toString());
             } catch (NumberFormatException e) {
-                tomasDiarias = 0; // Por defecto, medicamento ocasional
+                tomasDiarias = 0;
             }
         }
-        
-        // Si tomas diarias = 0, usar string vacío "" (medicamento ocasional)
-        // Esto es consistente con React: cuando tomasDiarias = 0, primeraToma = ""
-        String horarioPrimeraToma = (tomasDiarias > 0 && horaSeleccionada != null) ? horaSeleccionada : "";
+        String horarioPrimeraToma = listaHorarios.isEmpty() ? "" : listaHorarios.get(0);
         
         // Obtener stock inicial (puede estar vacío, usar valor por defecto)
         int stockInicial = 0;
@@ -644,17 +767,23 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
             }
         }
         
-        // Obtener días de tratamiento (puede estar vacío, -1 para crónico)
-        String diasTratamientoStr = etDiasTratamiento.getText() != null ? etDiasTratamiento.getText().toString() : "";
-        int diasTratamiento = -1; // Por defecto, crónico
-        if (!TextUtils.isEmpty(diasTratamientoStr)) {
-            try {
-                diasTratamiento = Integer.parseInt(diasTratamientoStr);
-                if (diasTratamiento < -1) {
-                    diasTratamiento = -1; // No permitir valores menores a -1
-                }
-            } catch (NumberFormatException e) {
+        // Días de tratamiento: -1 si "Es crónico" está activo, sino el valor del campo
+        int diasTratamiento;
+        if (switchEsCronico != null && switchEsCronico.isChecked()) {
+            diasTratamiento = -1; // Crónico
+        } else {
+            String diasTratamientoStr = etDiasTratamiento.getText() != null ? etDiasTratamiento.getText().toString().trim() : "";
+            if (TextUtils.isEmpty(diasTratamientoStr)) {
                 diasTratamiento = -1; // Por defecto, crónico
+            } else {
+                try {
+                    diasTratamiento = Integer.parseInt(diasTratamientoStr);
+                    if (diasTratamiento < 0) {
+                        diasTratamiento = 0;
+                    }
+                } catch (NumberFormatException e) {
+                    diasTratamiento = -1;
+                }
             }
         }
 
@@ -673,6 +802,11 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         );
 
         medicamento.setDetalles(detalles);
+
+        // Horarios del día (primera toma + adicionales): aplican todos los días o duración del tratamiento
+        if (!listaHorarios.isEmpty()) {
+            medicamento.setHorariosTomas(new ArrayList<>(listaHorarios));
+        }
 
         // Fecha de vencimiento (ya validada en validarFormulario si stock > 0)
         if (fechaVencimiento != null) {
@@ -740,7 +874,7 @@ public class NuevaMedicinaActivity extends AppCompatActivity {
         if (btnSeleccionarColor == null) return;
         int colorInt = ColorUtils.hexToInt(colorSeleccionadoHex);
         btnSeleccionarColor.setBackgroundColor(colorInt);
-        btnSeleccionarColor.setText("Color asignado");
+        btnSeleccionarColor.setText(getString(R.string.btn_color_asignado));
     }
 
     private void mostrarSelectorHora() {

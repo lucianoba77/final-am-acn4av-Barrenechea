@@ -345,6 +345,22 @@ public class Medicamento {
      * Devuelve los horarios de tomas para un día de la semana dado (0=Domingo, ..., 6=Sábado).
      * Usado por AlarmScheduler para programar por día.
      */
+    /**
+     * Indica si tiene programación personalizada con al menos un día que tiene horarios.
+     * Usado por el filtro del dashboard para no rechazar por horarioPrimeraToma vacío.
+     */
+    public boolean tieneProgramacionConHorarios() {
+        if (!usarProgramacionPersonalizada || programacionPersonalizada == null || programacionPersonalizada.isEmpty()) {
+            return false;
+        }
+        for (List<String> list : programacionPersonalizada.values()) {
+            if (list != null && !list.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public List<String> getHorariosParaDiaSemana(int diaSemana0a6) {
         if (diaSemana0a6 < 0 || diaSemana0a6 > 6) {
             return horariosTomas != null ? new ArrayList<>(horariosTomas) : new ArrayList<>();

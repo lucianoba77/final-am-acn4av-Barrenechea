@@ -56,7 +56,6 @@ public class ValidationUtilsTest {
         assertFalse(ValidationUtils.isValidTime(""));
         assertFalse(ValidationUtils.isValidTime("25:00"));
         assertFalse(ValidationUtils.isValidTime("12:60"));
-        assertFalse(ValidationUtils.isValidTime("8:00")); // sin cero a la izquierda en minutos está bien "8:00" -> "08:00"? No, pattern is ^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$ so 8:00 would match (0-1)?[0-9] = 8, and [0-5][0-9] = 00. So 8:00 matches. So "8:00" might not - let me check: [0-1]?[0-9] allows 8, and :[0-5][0-9] requires two digits for minutes. So "8:00" has two digits 00 - so it matches. So "8:00" is valid. I'll leave the invalid cases as above.
     }
 
     @Test

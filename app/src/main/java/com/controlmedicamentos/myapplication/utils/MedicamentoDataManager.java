@@ -4,7 +4,9 @@ import android.content.Context;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import com.controlmedicamentos.myapplication.R;
 import com.controlmedicamentos.myapplication.models.Medicamento;
+import com.controlmedicamentos.myapplication.models.Toma;
 import com.controlmedicamentos.myapplication.services.FirebaseService;
 import com.controlmedicamentos.myapplication.services.TomaTrackingService;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -12,8 +14,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Clase de utilidad para gestionar la carga y actualización de datos de medicamentos.
@@ -86,81 +89,95 @@ public class MedicamentoDataManager {
     public void cargarMedicamentos(ProgressBar progressBar, DataCallback callback) {
         // Verificar conexión a internet
         if (!NetworkUtils.isNetworkAvailable(context)) {
-            Toast.makeText(context, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, context.getString(R.string.msg_no_internet), Toast.LENGTH_LONG).show();
             if (progressBar != null) {
                 progressBar.setVisibility(View.GONE);
             }
             if (callback != null) {
-                callback.onError(new Exception("No hay conexión a internet"));
+                callback.onError(new Exception(context.getString(R.string.msg_no_internet)));
             }
             return;
         }
 
-        // Cargar medicamentos activos desde Firebase
+        // Cargar medicamentos activos y tomas del usuario para sincronizar estado "tomada" con la DB
         Logger.d("MedicamentoDataManager", "Iniciando carga de medicamentos desde Firebase");
         firebaseService.obtenerMedicamentosActivos(new FirebaseService.FirestoreListCallback() {
             @Override
             public void onSuccess(List<?> result) {
-                try {
-                    Logger.d("MedicamentoDataManager", "Medicamentos cargados exitosamente: " + 
-                            (result != null ? result.size() : 0));
-                    if (progressBar != null) {
-                        progressBar.setVisibility(View.GONE);
-                    }
-                    
-                    List<Medicamento> todosLosMedicamentos = new ArrayList<>();
-                    if (result != null) {
-                        todosLosMedicamentos = (List<Medicamento>) result;
-                    }
-                    
-                    Logger.d("MedicamentoDataManager", "Carga inicial: " + todosLosMedicamentos.size() + 
-                            " medicamentos cargados desde Firebase");
-                    
-                    // Filtrar medicamentos activos: solo activos y no pausados (consistente con listener)
-                    List<Medicamento> medicamentosActivos = new ArrayList<>();
-                    for (Medicamento med : todosLosMedicamentos) {
-                        if (med.isActivo() && !med.isPausado()) {
-                            medicamentosActivos.add(med);
+                final List<Medicamento> todosLosMedicamentos = new ArrayList<>();
+                if (result != null) {
+                    for (Object o : result) {
+                        if (o instanceof Medicamento) {
+                            todosLosMedicamentos.add((Medicamento) o);
                         }
                     }
-                    Logger.d("MedicamentoDataManager", "Medicamentos activos y no pausados: " + medicamentosActivos.size() + 
-                        " de " + todosLosMedicamentos.size());
-                    
-                    // Inicializar tomas del día solo para medicamentos activos y no pausados
-                    for (Medicamento med : medicamentosActivos) {
-                        Logger.d("MedicamentoDataManager", "Inicializando tomas para: " + med.getNombre() + 
-                              " (ID: " + med.getId() + ", activo: " + med.isActivo() + 
-                              ", tomasDiarias: " + med.getTomasDiarias() + 
-                              ", horarioPrimeraToma: " + med.getHorarioPrimeraToma() + ")");
-                        tomaTrackingService.inicializarTomasDia(med);
-                    }
-                    
-                    // Marcar tomas omitidas después de las 01:01hs
-                    tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
-                    
-                    // Filtrar medicamentos usando la clase utilitaria (usar medicamentosActivos para consistencia)
-                    Logger.d("MedicamentoDataManager", "Aplicando filtro para dashboard a " + medicamentosActivos.size() + " medicamentos activos");
-                    List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
-                        medicamentosActivos, tomaTrackingService
-                    );
-                    Logger.d("MedicamentoDataManager", "Medicamentos para dashboard después del filtro: " + medicamentosParaDashboard.size());
-                    Logger.d("MedicamentoDataManager", "========== MEDICAMENTOS FINALES PARA DASHBOARD ==========");
-                    for (int i = 0; i < medicamentosParaDashboard.size(); i++) {
-                        Medicamento m = medicamentosParaDashboard.get(i);
-                        Logger.d("MedicamentoDataManager", String.format("[%d] %s (ID: %s, TomasDiarias: %d, StockActual: %d)", 
-                            i, m.getNombre(), m.getId(), m.getTomasDiarias(), m.getStockActual()));
-                    }
-                    Logger.d("MedicamentoDataManager", "========================================================");
-                    
-                    if (callback != null) {
-                        callback.onDataLoaded(medicamentosParaDashboard, todosLosMedicamentos);
-                    }
-                } catch (Exception e) {
-                    Logger.e("MedicamentoDataManager", "Error al procesar medicamentos", e);
-                    if (callback != null) {
-                        callback.onError(e);
-                    }
                 }
+                Logger.d("MedicamentoDataManager", "Medicamentos cargados: " + todosLosMedicamentos.size() + ", obteniendo tomas del usuario para sincronizar...");
+                firebaseService.obtenerTomasUsuario(new FirebaseService.FirestoreListCallback() {
+                    @Override
+                    public void onSuccess(List<?> tomasResult) {
+                        try {
+                            if (progressBar != null) {
+                                progressBar.setVisibility(View.GONE);
+                            }
+                            List<Toma> tomasUsuario = new ArrayList<>();
+                            if (tomasResult != null) {
+                                for (Object o : tomasResult) {
+                                    if (o instanceof Toma) tomasUsuario.add((Toma) o);
+                                }
+                            }
+                            Calendar hoy = Calendar.getInstance();
+                            List<Toma> tomasHoyTomadas = new ArrayList<>();
+                            for (Toma t : tomasUsuario) {
+                                if (t.getEstado() != Toma.EstadoToma.TOMADA) continue;
+                                Date f = t.getFechaHoraTomada() != null ? t.getFechaHoraTomada() : t.getFechaHoraProgramada();
+                                if (f == null) continue;
+                                Calendar cal = Calendar.getInstance();
+                                cal.setTime(f);
+                                if (cal.get(Calendar.YEAR) == hoy.get(Calendar.YEAR) && cal.get(Calendar.DAY_OF_YEAR) == hoy.get(Calendar.DAY_OF_YEAR)) {
+                                    tomasHoyTomadas.add(t);
+                                }
+                            }
+                            Logger.d("MedicamentoDataManager", "Tomas de hoy ya tomadas en DB: " + tomasHoyTomadas.size());
+
+                            List<Medicamento> medicamentosActivos = new ArrayList<>();
+                            for (Medicamento med : todosLosMedicamentos) {
+                                if (med.isActivo() && !med.isPausado()) {
+                                    medicamentosActivos.add(med);
+                                }
+                            }
+                            for (Medicamento med : medicamentosActivos) {
+                                tomaTrackingService.inicializarTomasDia(med);
+                            }
+                            tomaTrackingService.sincronizarTomasTomadasDesdeFirestore(tomasHoyTomadas);
+                            tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
+
+                            List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
+                                medicamentosActivos, tomaTrackingService
+                            );
+                            Logger.d("MedicamentoDataManager", "Dashboard: " + medicamentosParaDashboard.size() + " medicamentos (sincronizado con DB)");
+                            if (callback != null) {
+                                callback.onDataLoaded(medicamentosParaDashboard, todosLosMedicamentos);
+                            }
+                        } catch (Exception e) {
+                            Logger.e("MedicamentoDataManager", "Error al procesar medicamentos/tomas", e);
+                            if (callback != null) {
+                                callback.onError(e);
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        if (progressBar != null) {
+                            progressBar.setVisibility(View.GONE);
+                        }
+                        Logger.e("MedicamentoDataManager", "Error al cargar tomas del usuario", exception);
+                        if (callback != null) {
+                            callback.onError(exception);
+                        }
+                    }
+                });
             }
 
             @Override
@@ -192,13 +209,16 @@ public class MedicamentoDataManager {
                         try {
                             Logger.d("MedicamentoDataManager", "Listener: medicamentos recibidos: " + 
                                     (result != null ? result.size() : 0));
-                            List<Medicamento> todosLosMedicamentos = new ArrayList<>();
+                            final List<Medicamento> todosLosMedicamentos = new ArrayList<>();
                             if (result != null) {
-                                todosLosMedicamentos = (List<Medicamento>) result;
+                                for (Object o : result) {
+                                    if (o instanceof Medicamento) {
+                                        todosLosMedicamentos.add((Medicamento) o);
+                                    }
+                                }
                             }
-                            
                             // Filtrar medicamentos activos: solo activos y no pausados
-                            List<Medicamento> medicamentosActivos = new ArrayList<>();
+                            final List<Medicamento> medicamentosActivos = new ArrayList<>();
                             for (Medicamento med : todosLosMedicamentos) {
                                 if (med.isActivo() && !med.isPausado()) {
                                     medicamentosActivos.add(med);
@@ -211,22 +231,53 @@ public class MedicamentoDataManager {
                             for (Medicamento med : medicamentosActivos) {
                                 tomaTrackingService.inicializarTomasDia(med);
                             }
-                            
-                            // Marcar tomas omitidas después de las 01:01hs
-                            tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
-                            
-                            // Filtrar medicamentos usando la clase utilitaria
-                            Logger.d("MedicamentoDataManager", "Listener: Aplicando filtro para dashboard a " + medicamentosActivos.size() + " medicamentos activos");
-                            List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
-                                medicamentosActivos, tomaTrackingService
-                            );
-                            Logger.d("MedicamentoDataManager", "Listener: Medicamentos para dashboard después del filtro: " + medicamentosParaDashboard.size());
-                            
-                            listenerYaActualizo = true;
-                            
-                            if (callback != null) {
-                                callback.onDataLoaded(medicamentosParaDashboard, todosLosMedicamentos);
-                            }
+                            // Sincronizar con tomas ya registradas en Firestore (hoy, TOMADA)
+                            firebaseService.obtenerTomasUsuario(new FirebaseService.FirestoreListCallback() {
+                                @Override
+                                public void onSuccess(List<?> tomasResult) {
+                                    try {
+                                        List<Toma> tomasUsuario = new ArrayList<>();
+                                        if (tomasResult != null) {
+                                            for (Object o : tomasResult) {
+                                                if (o instanceof Toma) tomasUsuario.add((Toma) o);
+                                            }
+                                        }
+                                        Calendar hoyCal = Calendar.getInstance();
+                                        List<Toma> tomasHoyTomadas = new ArrayList<>();
+                                        for (Toma t : tomasUsuario) {
+                                            if (t.getEstado() != Toma.EstadoToma.TOMADA) continue;
+                                            Date f = t.getFechaHoraTomada() != null ? t.getFechaHoraTomada() : t.getFechaHoraProgramada();
+                                            if (f == null) continue;
+                                            Calendar cal = Calendar.getInstance();
+                                            cal.setTime(f);
+                                            if (cal.get(Calendar.YEAR) == hoyCal.get(Calendar.YEAR) && cal.get(Calendar.DAY_OF_YEAR) == hoyCal.get(Calendar.DAY_OF_YEAR)) {
+                                                tomasHoyTomadas.add(t);
+                                            }
+                                        }
+                                        tomaTrackingService.sincronizarTomasTomadasDesdeFirestore(tomasHoyTomadas);
+                                    } catch (Exception ignored) { }
+                                    tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
+                                    List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
+                                        medicamentosActivos, tomaTrackingService
+                                    );
+                                    Logger.d("MedicamentoDataManager", "Listener: Dashboard después del filtro: " + medicamentosParaDashboard.size());
+                                    listenerYaActualizo = true;
+                                    if (callback != null) {
+                                        callback.onDataLoaded(medicamentosParaDashboard, todosLosMedicamentos);
+                                    }
+                                }
+                                @Override
+                                public void onError(Exception exception) {
+                                    tomaTrackingService.marcarTomasOmitidasDespuesDe0101();
+                                    List<Medicamento> medicamentosParaDashboard = MedicamentoFilter.filtrarParaDashboard(
+                                        medicamentosActivos, tomaTrackingService
+                                    );
+                                    listenerYaActualizo = true;
+                                    if (callback != null) {
+                                        callback.onDataLoaded(medicamentosParaDashboard, todosLosMedicamentos);
+                                    }
+                                }
+                            });
                         } catch (Exception e) {
                             Logger.e("MedicamentoDataManager", "Error en callback del listener", e);
                             if (callback != null) {
@@ -277,63 +328,45 @@ public class MedicamentoDataManager {
         
         // Verificar caché: si la lista es la misma y estamos en el mismo minuto, retornar caché
         String fechaHoy = obtenerFechaHoy();
-        if (ultimaListaOrdenada != null && 
-            ultimaFechaOrdenamiento != null && 
-            fechaHoy.equals(ultimaFechaOrdenamiento) &&
+        if (ultimaListaOrdenada != null &&
+            Objects.equals(fechaHoy, ultimaFechaOrdenamiento) &&
             ultimosMinutosActuales == minutosActuales &&
             listasSonIguales(medicamentos, ultimaListaOrdenada)) {
             Logger.d("MedicamentoDataManager", "Usando caché de ordenamiento");
             return new ArrayList<>(ultimaListaOrdenada); // Retornar copia para evitar modificación
         }
 
-        // Crear una copia para no modificar la original
-        List<Medicamento> medicamentosOrdenados = new ArrayList<>(medicamentos);
-
-        // Ordenar usando un comparador personalizado
-        medicamentosOrdenados.sort((med1, med2) -> {
-            // Verificar si tienen tomas omitidas
-            boolean tieneOmitidas1 = tomaTrackingService.tieneTomasOmitidas(med1.getId());
-            boolean tieneOmitidas2 = tomaTrackingService.tieneTomasOmitidas(med2.getId());
-            
-            // Si uno tiene omitidas y el otro no, el que tiene omitidas va al final
-            if (tieneOmitidas1 && !tieneOmitidas2) {
-                return 1; // med1 va después
-            }
-            if (!tieneOmitidas1 && tieneOmitidas2) {
-                return -1; // med2 va después
-            }
-            
-            // Si ambos tienen o no tienen omitidas, ordenar por próxima toma
-            String horario1 = obtenerHorarioProximaToma(med1);
-            String horario2 = obtenerHorarioProximaToma(med2);
-            
-            if (horario1 == null && horario2 == null) {
-                return 0;
-            }
-            if (horario1 == null) {
-                return 1; // med1 va después
-            }
-            if (horario2 == null) {
-                return -1; // med2 va después
-            }
-            
-            // Calcular minutos hasta cada toma
-            int minutos1 = calcularMinutosHastaToma(horario1, minutosActuales);
-            int minutos2 = calcularMinutosHastaToma(horario2, minutosActuales);
-            
-            return Integer.compare(minutos1, minutos2);
-        });
-
-        // Guardar en caché
+        List<Medicamento> medicamentosOrdenados = crearListaOrdenadaPorHorario(medicamentos, minutosActuales);
         ultimaListaOrdenada = new ArrayList<>(medicamentosOrdenados);
         ultimaFechaOrdenamiento = fechaHoy;
         ultimosMinutosActuales = minutosActuales;
-
         return medicamentosOrdenados;
+    }
+
+    /**
+     * Crea una copia de la lista de medicamentos ordenada por próxima toma (omitidas al final).
+     */
+    private List<Medicamento> crearListaOrdenadaPorHorario(List<Medicamento> medicamentos, int minutosActuales) {
+        List<Medicamento> copia = new ArrayList<>(medicamentos);
+        copia.sort((med1, med2) -> {
+            boolean tieneOmitidas1 = tomaTrackingService.tieneTomasOmitidas(med1.getId());
+            boolean tieneOmitidas2 = tomaTrackingService.tieneTomasOmitidas(med2.getId());
+            if (tieneOmitidas1 && !tieneOmitidas2) return 1;
+            if (!tieneOmitidas1 && tieneOmitidas2) return -1;
+            String horario1 = obtenerHorarioProximaToma(med1);
+            String horario2 = obtenerHorarioProximaToma(med2);
+            if (horario1 == null && horario2 == null) return 0;
+            if (horario1 == null) return 1;
+            if (horario2 == null) return -1;
+            int minutos1 = calcularMinutosHastaToma(horario1, minutosActuales);
+            int minutos2 = calcularMinutosHastaToma(horario2, minutosActuales);
+            return Integer.compare(minutos1, minutos2);
+        });
+        return copia;
     }
     
     /**
-     * Compara dos listas de medicamentos para verificar si son iguales (mismos IDs y orden).
+     * Compara dos listas de medicamentos para verificar si son iguales (mismos identificadores y orden).
      * @param lista1 Primera lista
      * @param lista2 Segunda lista
      * @return true si las listas tienen los mismos medicamentos en el mismo orden

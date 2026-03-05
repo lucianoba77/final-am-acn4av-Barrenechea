@@ -638,7 +638,7 @@ public class FirebaseService {
             return;
         }
 
-        // Limitar a últimas 200 tomas del medicamento para optimizar rendimiento
+        // Intentar con orderBy; si falla por falta de índice, obtener sin orden y ordenar en memoria
         db.collection(COLLECTION_TOMAS)
             .whereEqualTo("userId", firebaseUser.getUid())
             .whereEqualTo("medicamentoId", medicamentoId)
@@ -649,16 +649,43 @@ public class FirebaseService {
                 if (task.isSuccessful()) {
                     List<Toma> tomas = new ArrayList<>();
                     for (DocumentSnapshot document : task.getResult()) {
-                        tomas.add(mapToToma(document));
+                        Toma t = mapToToma(document);
+                        if (t != null) tomas.add(t);
                     }
                     if (callback != null) {
                         callback.onSuccess(tomas);
                     }
                 } else {
-                    Logger.e(TAG, "Error al obtener tomas del medicamento", task.getException());
-                    if (callback != null) {
-                        callback.onError(task.getException());
-                    }
+                    // Fallback: obtener sin orderBy y ordenar localmente
+                    Logger.w(TAG, "Error al obtener tomas del medicamento con orderBy, intentando sin orden", task.getException());
+                    db.collection(COLLECTION_TOMAS)
+                        .whereEqualTo("userId", firebaseUser.getUid())
+                        .whereEqualTo("medicamentoId", medicamentoId)
+                        .get()
+                        .addOnCompleteListener(task2 -> {
+                            if (task2.isSuccessful()) {
+                                List<Toma> tomas = new ArrayList<>();
+                                for (DocumentSnapshot document : task2.getResult()) {
+                                    Toma t = mapToToma(document);
+                                    if (t != null) tomas.add(t);
+                                }
+                                tomas.sort((t1, t2) -> {
+                                    if (t1.getFechaHoraTomada() == null || t2.getFechaHoraTomada() == null) return 0;
+                                    return t2.getFechaHoraTomada().compareTo(t1.getFechaHoraTomada());
+                                });
+                                if (tomas.size() > 200) {
+                                    tomas = new ArrayList<>(tomas.subList(0, 200));
+                                }
+                                if (callback != null) {
+                                    callback.onSuccess(tomas);
+                                }
+                            } else {
+                                Logger.e(TAG, "Error al obtener tomas del medicamento", task2.getException());
+                                if (callback != null) {
+                                    callback.onError(task2.getException());
+                                }
+                            }
+                        });
                 }
             });
     }
@@ -714,14 +741,17 @@ public class FirebaseService {
                                         tomas.add(toma);
                                     }
                                 }
-                                // Ordenar manualmente por fecha
+                                // Ordenar manualmente por fecha descendente y limitar a 500 (igual que con índice)
                                 tomas.sort((t1, t2) -> {
                                     if (t1.getFechaHoraTomada() == null || t2.getFechaHoraTomada() == null) {
                                         return 0;
                                     }
                                     return t2.getFechaHoraTomada().compareTo(t1.getFechaHoraTomada());
                                 });
-                    if (callback != null) {
+                                if (tomas.size() > 500) {
+                                    tomas = new ArrayList<>(tomas.subList(0, 500));
+                                }
+                                if (callback != null) {
                                     callback.onSuccess(tomas);
                                 }
                             } else {

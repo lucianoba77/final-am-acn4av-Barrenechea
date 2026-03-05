@@ -32,7 +32,6 @@ import com.github.mikephil.charting.data.BarData;
 import com.github.mikephil.charting.data.BarDataSet;
 import com.github.mikephil.charting.data.BarEntry;
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter;
-import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputLayout;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,9 +47,8 @@ public class HistorialActivity extends AppCompatActivity {
     private RecyclerView rvAdherenciaPorMedicamento;
     private TextView tvEstadisticasGenerales;
     private TextView tvEmptyOcasionales;
-    private MaterialButton btnVolver;
     // Botones de navegación
-    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
+    private View btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     private HistorialAdapter adapter;
     private HistorialAdapter adapterOcasionales;
     private AdherenciaAdapter adherenciaAdapter;
@@ -129,8 +127,7 @@ public class HistorialActivity extends AppCompatActivity {
         rvAdherenciaPorMedicamento = findViewById(R.id.rvAdherenciaPorMedicamento);
         tvEstadisticasGenerales = findViewById(R.id.tvEstadisticasGenerales);
         tvEmptyOcasionales = findViewById(R.id.tvEmptyOcasionales);
-        btnVolver = findViewById(R.id.btnVolver);
-        
+
         // Botones de navegación
         btnNavHome = findViewById(R.id.btnNavHome);
         btnNavNuevaMedicina = findViewById(R.id.btnNavNuevaMedicina);
@@ -201,7 +198,7 @@ public class HistorialActivity extends AppCompatActivity {
     private void cargarDatos() {
         // Verificar conexión a internet
         if (!NetworkUtils.isNetworkAvailable(this)) {
-            tvEstadisticasGenerales.setText("No hay conexión a internet");
+            tvEstadisticasGenerales.setText(getString(R.string.msg_no_internet));
             return;
         }
 
@@ -217,7 +214,7 @@ public class HistorialActivity extends AppCompatActivity {
 
             @Override
             public void onError(Exception exception) {
-                tvEstadisticasGenerales.setText("Error al cargar datos");
+                tvEstadisticasGenerales.setText(getString(R.string.msg_error_loading_data));
             }
         });
     }
@@ -241,7 +238,7 @@ public class HistorialActivity extends AppCompatActivity {
                 if (todosLosMedicamentos.isEmpty()) {
                     tvEstadisticasGenerales.setText("No hay medicamentos registrados");
                 } else {
-                    tvEstadisticasGenerales.setText("No se pudieron cargar las tomas. Mostrando medicamentos disponibles.");
+                    tvEstadisticasGenerales.setText(getString(R.string.msg_could_not_load_takes));
                 }
             }
         });
@@ -256,21 +253,22 @@ public class HistorialActivity extends AppCompatActivity {
             return;
         }
 
-        // Filtros alineados con web: con seguimiento (no ocasionales), activos vigentes, no vigentes
+        // Con seguimiento: no ocasionales, activos, no pausados, no vencidos (el usuario los está tomando)
         medicamentosConSeguimiento = new ArrayList<>();
         for (Medicamento med : todosLosMedicamentos) {
-            if (!MedicamentoUtils.esMedicamentoOcasional(med)) {
-                medicamentosConSeguimiento.add(med);
+            if (MedicamentoUtils.esMedicamentoOcasional(med)) continue;
+            if (!med.isActivo() || med.isPausado() || MedicamentoUtils.estaVencido(med)) continue;
+            medicamentosConSeguimiento.add(med);
+        }
+        medicamentosConAdherencia = new ArrayList<>(medicamentosConSeguimiento);
+        // No vigentes: programados pero pausados, vencidos o inactivos
+        List<Medicamento> noVigentes = new ArrayList<>();
+        for (Medicamento med : todosLosMedicamentos) {
+            if (MedicamentoUtils.esMedicamentoOcasional(med)) continue;
+            if (med.isPausado() || !med.isActivo() || MedicamentoUtils.estaVencido(med)) {
+                noVigentes.add(med);
             }
         }
-        medicamentosConAdherencia = new ArrayList<>();
-        for (Medicamento med : medicamentosConSeguimiento) {
-            if (med.isActivo() && !MedicamentoUtils.estaVencido(med)) {
-                medicamentosConAdherencia.add(med);
-            }
-        }
-        List<Medicamento> noVigentes = new ArrayList<>(medicamentosConSeguimiento);
-        noVigentes.removeAll(medicamentosConAdherencia);
 
         tvEstadisticasGenerales.setText(
             getString(R.string.adhesion_stat_con_seguimiento, medicamentosConSeguimiento.size()) + "\n"
@@ -294,7 +292,7 @@ public class HistorialActivity extends AppCompatActivity {
 
             resumenes.add(AdherenciaCalculator.calcularResumenGeneral(medicamento, tomasMedicamento));
 
-            if (medicamento.isPausado() || !medicamento.isActivo()) {
+            if (medicamento.isPausado() || !medicamento.isActivo() || MedicamentoUtils.estaVencido(medicamento)) {
                 tratamientosConcluidos.add(medicamento);
             }
         }
@@ -365,7 +363,7 @@ public class HistorialActivity extends AppCompatActivity {
         
         // Mostrar datos incluso si no hay tomas (mostrará 0% de adherencia)
         if (tomasUsuario.isEmpty()) {
-            tvResumenAdherenciaGeneral.setText("No hay tomas registradas. Adherencia: 0%");
+            tvResumenAdherenciaGeneral.setText(getString(R.string.msg_no_takes_adherence));
             // Limpiar gráficos
             if (chartAdherenciaGeneralSemanal != null) {
                 chartAdherenciaGeneralSemanal.clear();
@@ -499,16 +497,9 @@ public class HistorialActivity extends AppCompatActivity {
     }
 
     private void configurarListeners() {
-        if (btnVolver != null) {
-            btnVolver.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    finish();
-                }
-            });
-        }
+        // Sin botón Volver: la pantalla Adhesión se accede desde el menú inferior.
     }
-    
+
     private void configurarNavegacion() {
         NavigationHelper.configurarNavegacion(
             this,

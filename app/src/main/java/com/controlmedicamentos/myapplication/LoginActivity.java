@@ -53,7 +53,7 @@ public class LoginActivity extends AppCompatActivity {
         authService = new AuthService();
         
         // Inicializar Google Sign-In
-        String webClientId = getString(R.string.default_web_client_id);
+        String webClientId = BuildConfig.WEB_CLIENT_ID;
         authService.initializeGoogleSignIn(this, webClientId);
 
         // Verificar si ya hay un usuario autenticado

@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <!-- Header -->
+    <!-- Header (sin botón Volver: se accede por el menú inferior) -->
     <LinearLayout
         android:id="@+id/headerLayout"
         android:layout_width="match_parent"
@@ -17,21 +17,12 @@
         android:paddingBottom="@dimen/padding_medium"
         android:minHeight="?attr/actionBarSize"
         android:background="@color/primary"
-        android:gravity="center_vertical"
+        android:gravity="center"
         android:layout_alignParentTop="true">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnVolver"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_back"
-            android:textColor="@color/white"
-            android:backgroundTint="@color/primary_dark" />
-
         <TextView
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="@string/historial_title"
             android:textSize="@dimen/text_size_header"
             android:textColor="@color/white"
@@ -39,9 +30,7 @@
             android:gravity="center"
             android:maxLines="1"
             android:ellipsize="end"
-            android:paddingVertical="8dp"
-            android:paddingStart="@dimen/padding_small"
-            android:paddingEnd="@dimen/padding_small" />
+            android:paddingVertical="8dp" />
 
     </LinearLayout>
 
@@ -87,7 +76,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/loading_statistics"
-                    android:textSize="@dimen/text_size_medium"
+                    android:textSize="@dimen/text_size_large"
                     android:textColor="@color/black"
                     android:lineSpacingExtra="4dp" />
 
@@ -95,7 +84,7 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Adherencia por medicamento (Total) -->
+        <!-- Adherencia por medicamento (Total) - mismo margen que el contenido de las cards -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -103,6 +92,18 @@
             android:textSize="@dimen/text_size_large"
             android:textColor="@color/black"
             android:textStyle="bold"
+            android:paddingStart="@dimen/padding_medium"
+            android:paddingEnd="@dimen/padding_medium"
+            android:layout_marginBottom="@dimen/margin_tiny" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/adhesion_leyenda_calculo"
+            android:textSize="@dimen/text_size_medium"
+            android:textColor="@color/secondary_text"
+            android:paddingStart="@dimen/padding_medium"
+            android:paddingEnd="@dimen/padding_medium"
             android:layout_marginBottom="@dimen/margin_small" />
 
         <androidx.recyclerview.widget.RecyclerView

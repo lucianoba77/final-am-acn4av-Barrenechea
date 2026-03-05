@@ -51,10 +51,16 @@ public class MedicamentoFilter {
             Logger.d(TAG, "Medicamento " + med.getNombre() + ": " + 
                       (tomasMedicamento != null ? tomasMedicamento.size() : 0) + " tomas obtenidas");
 
-            // Si no hay tomas inicializadas, el medicamento es nuevo y debe aparecer
+            // Si no hay tomas inicializadas, solo mostrar si tiene al menos un horario programado para hoy
+            // (evita mostrar medicamentos ocasionales o sin tomas para el día actual)
             if (tomasMedicamento == null || tomasMedicamento.isEmpty()) {
-                Logger.d(TAG, "Medicamento " + med.getNombre() + " sin tomas inicializadas, agregando al dashboard");
-                resultado.add(med);
+                List<String> horariosHoy = med.getHorariosTomasHoy();
+                if (horariosHoy != null && !horariosHoy.isEmpty()) {
+                    Logger.d(TAG, "Medicamento " + med.getNombre() + " sin tomas inicializadas pero con horarios para hoy, agregando al dashboard");
+                    resultado.add(med);
+                } else {
+                    Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: sin tomas inicializadas y sin horarios para hoy");
+                }
                 continue;
             }
 
@@ -92,14 +98,16 @@ public class MedicamentoFilter {
             return false;
         }
 
-        if (med.getHorarioPrimeraToma() == null || med.getHorarioPrimeraToma().isEmpty()) {
-            Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: horarioPrimeraToma vacío");
-            return false;
-        }
-
-        if (med.getHorarioPrimeraToma().equals(Constants.HORARIO_INVALIDO)) {
-            Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: horarioPrimeraToma es 00:00");
-            return false;
+        // Con programación personalizada, puede no haber horarioPrimeraToma único; basta con tener horarios algún día
+        if (!med.tieneProgramacionConHorarios()) {
+            if (med.getHorarioPrimeraToma() == null || med.getHorarioPrimeraToma().isEmpty()) {
+                Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: horarioPrimeraToma vacío");
+                return false;
+            }
+            if (med.getHorarioPrimeraToma().equals(Constants.HORARIO_INVALIDO)) {
+                Logger.d(TAG, "Medicamento " + med.getNombre() + " rechazado: horarioPrimeraToma es 00:00");
+                return false;
+            }
         }
 
         return true;

@@ -15,104 +15,183 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingStart="@dimen/padding_medium"
         android:paddingEnd="@dimen/padding_medium"
         android:paddingTop="@dimen/padding_large"
-        android:paddingBottom="@dimen/padding_large"
-        android:gravity="center_vertical">
+        android:paddingBottom="@dimen/padding_medium">
 
-        <!-- Ícono del medicamento con fondo circular -->
-        <FrameLayout
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_marginEnd="@dimen/margin_medium"
-            android:background="@drawable/ic_medicamento_background"
-            android:padding="@dimen/padding_small">
-            
-            <ImageView
-                android:id="@+id/ivIconoMedicamento"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="fitCenter"
-            android:src="@drawable/ic_medicamento"
-                android:contentDescription="Ícono del medicamento"
-                android:tint="@color/primary" />
-        </FrameLayout>
-
-        <!-- Información del medicamento -->
+        <!-- Fila 1: Ícono + información (sin botones, texto con espacio completo) -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-            <!-- Nombre del medicamento -->
-            <TextView
-                android:id="@+id/tvNombreMedicamento"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Paracetamol 500mg"
-                android:textSize="@dimen/text_size_large"
-                android:textColor="@color/black"
-                android:fontFamily="sans-serif-medium"
-                android:maxLines="2"
-                android:ellipsize="end"
-                android:layout_marginBottom="@dimen/margin_small" />
+            <!-- Ícono del medicamento con fondo circular -->
+            <FrameLayout
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_marginEnd="@dimen/margin_medium"
+                android:background="@drawable/ic_medicamento_background"
+                android:padding="@dimen/padding_small">
 
-            <!-- Información del medicamento -->
-            <TextView
-                android:id="@+id/tvInfoMedicamento"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Comprimidos • 3 tomas diarias"
-                android:textSize="@dimen/text_size_medium"
-                android:textColor="@color/secondary_text"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:layout_marginBottom="@dimen/margin_small" />
+                <ImageView
+                    android:id="@+id/ivIconoMedicamento"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_medicamento"
+                    android:contentDescription="Ícono del medicamento"
+                    android:tint="@color/primary" />
+            </FrameLayout>
 
-            <!-- Barras de progreso para tomas -->
+            <!-- Información del medicamento (ocupa todo el ancho disponible) -->
             <LinearLayout
-                android:id="@+id/llBarrasTomas"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="@dimen/margin_small" />
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:minWidth="0dp">
 
-            <!-- Información de stock -->
-            <TextView
-                android:id="@+id/tvStockInfo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Stock: 25/30 comprimidos"
-                android:textSize="@dimen/text_size_small"
-                android:textColor="@color/secondary_text" />
+                <!-- Nombre del medicamento -->
+                <TextView
+                    android:id="@+id/tvNombreMedicamento"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Paracetamol 500mg"
+                    android:textSize="@dimen/text_size_large"
+                    android:textColor="@color/black"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:layout_marginBottom="@dimen/margin_small" />
+
+                <!-- Información del medicamento (dos líneas para evitar truncado) -->
+                <TextView
+                    android:id="@+id/tvInfoMedicamento"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Comprimidos • 3 tomas diarias"
+                    android:textSize="@dimen/text_size_medium"
+                    android:textColor="@color/secondary_text"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:layout_marginBottom="@dimen/margin_small" />
+
+                <!-- Tomas hoy y próxima toma (alineado con versión web) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="@dimen/margin_small">
+
+                    <TextView
+                        android:id="@+id/tvTomasHoy"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textSize="@dimen/text_size_small"
+                        android:textColor="@color/secondary_text"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvProximaToma"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="@dimen/text_size_small"
+                        android:textColor="@color/secondary_text" />
+                </LinearLayout>
+
+                <!-- Una barra por cada horario de toma (horario + barra por fila) -->
+                <LinearLayout
+                    android:id="@+id/llBarrasTomas"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="@dimen/margin_small" />
+
+                <!-- Información de stock -->
+                <TextView
+                    android:id="@+id/tvStockInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Stock: 25/30 comprimidos"
+                    android:textSize="@dimen/text_size_small"
+                    android:textColor="@color/secondary_text" />
+
+                <!-- Fecha de vencimiento (cuando existe) -->
+                <TextView
+                    android:id="@+id/tvVence"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/text_size_small"
+                    android:textColor="@color/secondary_text"
+                    android:layout_marginTop="@dimen/margin_tiny"
+                    android:visibility="gone" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Botones de acción -->
+        <!-- Bloque aviso medicamento vencido (visible solo cuando está vencido) -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/llAvisoVencido"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:gravity="center">
-            
-            <!-- Botón Posponer (visible solo cuando hay tomas en alerta) -->
+            android:visibility="gone"
+            android:layout_marginTop="@dimen/margin_medium">
+
+            <TextView
+                android:id="@+id/tvAvisoVencidoLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/medicine_expired_label"
+                android:textSize="@dimen/text_size_medium"
+                android:textColor="@color/black"
+                android:background="@color/background"
+                android:padding="@dimen/padding_small"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/tvAvisoVencidoReplenish"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/medicine_expired_replenish"
+                android:textSize="@dimen/text_size_medium"
+                android:textColor="@color/white"
+                android:background="@color/black"
+                android:padding="@dimen/padding_small"
+                android:gravity="center"
+                android:layout_marginTop="@dimen/margin_tiny" />
+        </LinearLayout>
+
+        <!-- Fila 2: Botones alineados a la derecha (no tapan contenido) -->
+        <LinearLayout
+            android:id="@+id/llFilaBotones"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end|center_vertical"
+            android:layout_marginTop="@dimen/margin_medium">
+
+            <!-- Botón Posponer (visible solo cuando hay tomas en alerta o retraso) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPosponer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Posponer"
+                android:text="@string/btn_posponer"
+                android:contentDescription="@string/btn_posponer_help"
                 android:textSize="@dimen/text_size_small"
                 android:textColor="@color/white"
                 android:backgroundTint="@color/warning"
                 android:minWidth="80dp"
                 android:minHeight="36dp"
                 android:visibility="gone"
-                android:layout_marginBottom="@dimen/margin_small"
+                android:layout_marginEnd="@dimen/margin_small"
                 style="@style/MedicineButton" />
-            
+
             <!-- Botón Tomado -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnTomado"
@@ -125,6 +204,7 @@
                 android:minWidth="80dp"
                 android:minHeight="40dp"
                 style="@style/MedicineButton" />
+
         </LinearLayout>
 
     </LinearLayout>

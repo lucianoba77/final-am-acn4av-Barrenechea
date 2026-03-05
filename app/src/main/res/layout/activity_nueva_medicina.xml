@@ -128,8 +128,7 @@
                             android:layout_height="wrap_content"
                             android:inputType="number"
                             android:textSize="@dimen/text_size_medium"
-                            android:textStyle="bold"
-                            android:hint="@string/hint_doses_example" />
+                            android:textStyle="bold" />
 
                     </com.google.android.material.textfield.TextInputLayout>
 
@@ -150,6 +149,23 @@
                         android:text="@string/hint_time_example"
                         android:textColor="@color/white"
                         android:backgroundTint="@color/primary"
+                        android:layout_marginBottom="@dimen/margin_small" />
+
+                    <!-- Horarios adicionales del día (sin programación por día): lista + Agregar toma -->
+                    <LinearLayout
+                        android:id="@+id/containerHorariosAdicionales"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="@dimen/margin_small" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAgregarToma"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/btn_agregar_toma"
+                        android:textColor="@color/primary"
+                        style="@style/Widget.Material3.Button.TextButton"
                         android:layout_marginBottom="@dimen/margin_medium" />
 
                     <!-- Programación personalizada por día -->
@@ -182,12 +198,21 @@
                             android:layout_height="wrap_content"
                             android:inputType="number"
                             android:textSize="@dimen/text_size_medium"
-                            android:textStyle="bold"
-                            android:hint="@string/hint_stock_example" />
+                            android:textStyle="bold" />
 
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Días de tratamiento -->
+                    <!-- Es crónico: cuando está activo, Días de tratamiento queda deshabilitado (se guarda -1) -->
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchEsCronico"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/switch_es_cronico"
+                        android:textSize="@dimen/text_size_medium"
+                        android:checked="false"
+                        android:layout_marginBottom="@dimen/margin_small" />
+
+                    <!-- Días de tratamiento (deshabilitado si "Es crónico" está activo) -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilDiasTratamiento"
                         style="@style/FormField"
@@ -199,10 +224,9 @@
                             android:id="@+id/etDiasTratamiento"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:inputType="numberSigned|text"
+                            android:inputType="number"
                             android:textSize="@dimen/text_size_medium"
-                            android:textStyle="bold"
-                            android:hint="@string/hint_treatment_days_example" />
+                            android:textStyle="bold" />
 
                     </com.google.android.material.textfield.TextInputLayout>
 

@@ -1,9 +1,8 @@
 package com.controlmedicamentos.myapplication.utils;
 
-import android.content.Context;
 import android.content.Intent;
+import android.view.View;
 import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.material.button.MaterialButton;
 import com.controlmedicamentos.myapplication.BotiquinActivity;
 import com.controlmedicamentos.myapplication.HistorialActivity;
 import com.controlmedicamentos.myapplication.AjustesActivity;
@@ -33,11 +32,11 @@ public class NavigationHelper {
      */
     public static void configurarNavegacion(
             AppCompatActivity activity,
-            MaterialButton btnNavHome,
-            MaterialButton btnNavNuevaMedicina,
-            MaterialButton btnNavBotiquin,
-            MaterialButton btnNavHistorial,
-            MaterialButton btnNavAjustes) {
+            View btnNavHome,
+            View btnNavNuevaMedicina,
+            View btnNavBotiquin,
+            View btnNavHistorial,
+            View btnNavAjustes) {
         
         if (activity == null) {
             Logger.w("NavigationHelper", "Activity es null, no se puede configurar navegación");

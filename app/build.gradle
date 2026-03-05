@@ -15,13 +15,20 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Web Client ID público de OAuth (Google Sign-In / Calendar). Ver README.
+        buildConfigField "String", "WEB_CLIENT_ID", "\"${project.findProperty('WEB_CLIENT_ID') ?: '938306231220-eglguura8gmu64thg88pf5r4cbc59oj3.apps.googleusercontent.com'}\""
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+    buildFeatures {
+        buildConfig true
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11

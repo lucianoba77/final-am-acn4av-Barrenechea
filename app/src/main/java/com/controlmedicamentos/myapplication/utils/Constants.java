@@ -37,6 +37,12 @@ public class Constants {
      * Minutos antes del horario programado para activar la alerta amarilla.
      */
     public static final int MINUTOS_ALERTA_AMARILLA = 10;
+
+    /**
+     * Minutos antes del horario programado en que el botón Posponer está activo.
+     * Ventana de posponer: desde (horario - MINUTOS_POSPONER_ANTES) hasta (horario + HORAS_OMITIDA).
+     */
+    public static final int MINUTOS_POSPONER_ANTES = 30;
     
     /**
      * Minutos después del horario programado para considerar la toma en retraso.

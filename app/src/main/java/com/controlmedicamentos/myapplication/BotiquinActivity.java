@@ -15,7 +15,6 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.google.android.material.button.MaterialButton;
 import com.controlmedicamentos.myapplication.adapters.BotiquinAdapter;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.Toma;
@@ -32,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapter.OnMedicamentoClickListener {
@@ -57,11 +57,11 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     private final List<Medicamento> medicamentosOcasionales = new ArrayList<>();
     
     // Botones de navegación
-    private MaterialButton btnNavHome;
-    private MaterialButton btnNavNuevaMedicina;
-    private MaterialButton btnNavBotiquin;
-    private MaterialButton btnNavHistorial;
-    private MaterialButton btnNavAjustes;
+    private View btnNavHome;
+    private View btnNavNuevaMedicina;
+    private View btnNavBotiquin;
+    private View btnNavHistorial;
+    private View btnNavAjustes;
     
     private AuthService authService;
     private FirebaseService firebaseService;
@@ -195,7 +195,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         if (!NetworkUtils.isNetworkAvailable(this)) {
             Log.w(TAG, "cargarMedicamentos: ⚠️ No hay conexión a internet");
             Logger.w(TAG, "cargarMedicamentos: ⚠️ No hay conexión a internet");
-            Toast.makeText(this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.msg_no_internet), Toast.LENGTH_LONG).show();
             return;
         }
         
@@ -218,7 +218,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                     // Log detallado de cada medicamento
                     for (int i = 0; i < todosLosMedicamentos.size(); i++) {
                         Medicamento m = todosLosMedicamentos.get(i);
-                        Logger.d(TAG, String.format("cargarMedicamentos: [%d] ID=%s, Nombre=%s, TomasDiarias=%d, StockActual=%d, Pausado=%s", 
+                        Logger.d(TAG, String.format(Locale.ROOT, "cargarMedicamentos: [%d] ID=%s, Nombre=%s, TomasDiarias=%d, StockActual=%d, Pausado=%s", 
                             i, m.getId(), m.getNombre(), m.getTomasDiarias(), m.getStockActual(), m.isPausado()));
                     }
                 } else {
@@ -238,14 +238,14 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 }
                 
                 if (!idsDuplicados.isEmpty()) {
-                    Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - Medicamentos duplicados en la lista: " + idsDuplicados.toString());
+                    Logger.e(TAG, "cargarMedicamentos: ❌ ERROR - Medicamentos duplicados en la lista: " + idsDuplicados);
                 }
                 
                 // Separar medicamentos por tipo
                 Logger.d(TAG, "cargarMedicamentos: Separando medicamentos...");
                 separarMedicamentos(todosLosMedicamentos);
                 
-                Logger.d(TAG, String.format("cargarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
+                Logger.d(TAG, String.format(Locale.ROOT, "cargarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
                     medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
                 
                 // VERIFICACIÓN CRÍTICA: Comparar con medicamentos activos del dashboard
@@ -305,7 +305,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                             
                             if (!medicamentosFaltantes.isEmpty()) {
                                 Logger.e(TAG, "cargarMedicamentos: ❌ ERROR CRÍTICO - " + medicamentosFaltantes.size() + 
-                                    " medicamentos del dashboard NO están en el botiquín: " + medicamentosFaltantes.toString());
+                                    " medicamentos del dashboard NO están en el botiquín: " + medicamentosFaltantes);
                             } else {
                                 Logger.d(TAG, "cargarMedicamentos: ✅ Todos los medicamentos del dashboard están en el botiquín");
                             }
@@ -325,7 +325,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                             if (!medicamentosActivosNoEnDashboard.isEmpty()) {
                                 Logger.d(TAG, "cargarMedicamentos: ℹ️ " + medicamentosActivosNoEnDashboard.size() + 
                                     " medicamentos activos NO están en el dashboard (sin tomas válidas pendientes): " + 
-                                    medicamentosActivosNoEnDashboard.toString());
+                                    medicamentosActivosNoEnDashboard);
                             }
                             
                             // Verificar qué medicamentos están en el botiquín pero no son activos (esto es esperado)
@@ -343,7 +343,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                             if (!medicamentosSoloEnBotiquin.isEmpty()) {
                                 Logger.d(TAG, "cargarMedicamentos: ℹ️ " + medicamentosSoloEnBotiquin.size() + 
                                     " medicamentos están solo en el botiquín (esperado para pausados/inactivos): " + 
-                                    medicamentosSoloEnBotiquin.toString());
+                                    medicamentosSoloEnBotiquin);
                             }
                         }
                         Logger.d(TAG, "cargarMedicamentos: ================================================================");
@@ -359,23 +359,20 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 Logger.d(TAG, "=== TRATAMIENTOS (CON STOCK) ===");
                 for (int i = 0; i < medicamentosTratamiento.size(); i++) {
                     Medicamento m = medicamentosTratamiento.get(i);
-                    Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
+                    Logger.d(TAG, String.format(Locale.ROOT, "  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
                 }
                 
                 Logger.d(TAG, "=== TRATAMIENTOS (SIN STOCK) ===");
                 for (int i = 0; i < medicamentosTratamientoSinStock.size(); i++) {
                     Medicamento m = medicamentosTratamientoSinStock.get(i);
-                    Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
+                    Logger.d(TAG, String.format(Locale.ROOT, "  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
                 }
                 
                 Logger.d(TAG, "=== OCASIONALES ===");
                 for (int i = 0; i < medicamentosOcasionales.size(); i++) {
                     Medicamento m = medicamentosOcasionales.get(i);
-                    Logger.d(TAG, String.format("  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
+                    Logger.d(TAG, String.format(Locale.ROOT, "  [%d] %s (ID: %s, Stock: %d)", i, m.getNombre(), m.getId(), m.getStockActual()));
                 }
-                
-                // Crear variable final para usar en el lambda (ya creada arriba)
-                final int totalMedicamentos = todosLosMedicamentos.size();
                 
                 // Actualizar adapters en el hilo principal
                 Logger.d(TAG, "cargarMedicamentos: Actualizando adapters en hilo principal...");
@@ -431,9 +428,9 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
 
             @Override
             public void onError(Exception exception) {
-                Toast.makeText(BotiquinActivity.this, 
-                    "Error al cargar medicamentos: " + 
-                    (exception != null ? exception.getMessage() : "Error desconocido"), 
+                Toast.makeText(BotiquinActivity.this,
+                    getString(R.string.msg_error_loading_medicines,
+                            exception != null && exception.getMessage() != null ? exception.getMessage() : getString(R.string.error_unknown)),
                     Toast.LENGTH_LONG).show();
             }
         });
@@ -458,7 +455,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
             boolean pausado = medicamento.isPausado();
             boolean activo = medicamento.isActivo();
             
-            Logger.d(TAG, String.format("separarMedicamentos: Procesando '%s' - TomasDiarias=%d, StockActual=%d, Pausado=%s, Activo=%s", 
+            Logger.d(TAG, String.format(Locale.ROOT, "separarMedicamentos: Procesando '%s' - TomasDiarias=%d, StockActual=%d, Pausado=%s, Activo=%s", 
                 nombre, tomasDiarias, stockActual, pausado, activo));
             
             // Medicamentos con tratamiento: tomasDiarias > 0
@@ -467,23 +464,23 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 // IMPORTANTE: Incluir medicamentos pausados e inactivos en el botiquín para mostrar el inventario completo
                 if (stockActual > 0) {
                     medicamentosTratamiento.add(medicamento);
-                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (con stock) - Pausado: %s, Activo: %s", 
+                    Logger.d(TAG, String.format(Locale.ROOT, "separarMedicamentos: '%s' -> TRATAMIENTO (con stock) - Pausado: %s, Activo: %s", 
                         nombre, pausado, activo));
                 } else {
                     medicamentosTratamientoSinStock.add(medicamento);
-                    Logger.d(TAG, String.format("separarMedicamentos: '%s' -> TRATAMIENTO (sin stock) - Pausado: %s, Activo: %s", 
+                    Logger.d(TAG, String.format(Locale.ROOT, "separarMedicamentos: '%s' -> TRATAMIENTO (sin stock) - Pausado: %s, Activo: %s", 
                         nombre, pausado, activo));
                 }
             } else {
                 // Medicamentos ocasionales: tomasDiarias = 0
                 // IMPORTANTE: Incluir medicamentos pausados e inactivos en el botiquín para mostrar el inventario completo
                 medicamentosOcasionales.add(medicamento);
-                Logger.d(TAG, String.format("separarMedicamentos: '%s' -> OCASIONAL - Pausado: %s, Activo: %s", 
+                Logger.d(TAG, String.format(Locale.ROOT, "separarMedicamentos: '%s' -> OCASIONAL - Pausado: %s, Activo: %s", 
                     nombre, pausado, activo));
             }
         }
         
-        Logger.d(TAG, String.format("separarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
+        Logger.d(TAG, String.format(Locale.ROOT, "separarMedicamentos: Separación completada - Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
             medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
         
         // VERIFICACIÓN CRÍTICA: Asegurar que TODOS los medicamentos estén en alguna sección
@@ -522,7 +519,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
             }
             
             if (!medicamentosPerdidos.isEmpty()) {
-                Logger.e(TAG, "separarMedicamentos: ❌ Medicamentos NO asignados a ninguna sección: " + medicamentosPerdidos.toString());
+                Logger.e(TAG, "separarMedicamentos: ❌ Medicamentos NO asignados a ninguna sección: " + medicamentosPerdidos);
             }
         } else {
             Logger.d(TAG, "separarMedicamentos: ✅ Todos los medicamentos válidos están en alguna sección");
@@ -540,13 +537,13 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                 if (m.isActivo() && !m.isPausado()) medicamentosActivosNoPausados++;
             }
         }
-        Logger.d(TAG, String.format("separarMedicamentos: RESUMEN - Total: %d, Activos/NoPausados: %d (dashboard), Pausados: %d, Inactivos: %d",
+        Logger.d(TAG, String.format(Locale.ROOT, "separarMedicamentos: RESUMEN - Total: %d, Activos/NoPausados: %d (dashboard), Pausados: %d, Inactivos: %d",
             todosLosMedicamentos.size(), medicamentosActivosNoPausados, medicamentosPausados, medicamentosInactivos));
     }
 
     private void actualizarVisibilidadSecciones() {
         Logger.d(TAG, "actualizarVisibilidadSecciones: ========== ACTUALIZANDO VISIBILIDAD ==========");
-        Logger.d(TAG, String.format("actualizarVisibilidadSecciones: Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
+        Logger.d(TAG, String.format(Locale.ROOT, "actualizarVisibilidadSecciones: Tratamiento (con stock): %d, Tratamiento (sin stock): %d, Ocasionales: %d",
             medicamentosTratamiento.size(), medicamentosTratamientoSinStock.size(), medicamentosOcasionales.size()));
         
         // Sección de tratamientos con stock
@@ -643,11 +640,11 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
     @Override
     public void onEliminarClick(Medicamento medicamento) {
         new AlertDialog.Builder(this)
-                .setTitle("Eliminar Medicamento")
-                .setMessage("¿Estás seguro de que quieres eliminar " + medicamento.getNombre() + "?")
-                .setPositiveButton("Eliminar", (dialog, which) -> {
+                .setTitle(getString(R.string.dialog_delete_medicine_title))
+                .setMessage(getString(R.string.dialog_delete_medicine_message, medicamento.getNombre()))
+                .setPositiveButton(getString(R.string.btn_delete), (dialog, which) -> {
                     if (!NetworkUtils.isNetworkAvailable(BotiquinActivity.this)) {
-                        Toast.makeText(BotiquinActivity.this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+                        Toast.makeText(BotiquinActivity.this, getString(R.string.msg_no_internet), Toast.LENGTH_LONG).show();
                         return;
                     }
 
@@ -667,7 +664,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
 
                                 @Override
                                 public void onError(Exception exception) {
-                                    // Si falla la sincronización con Google Calendar, aún así eliminar el medicamento
+                                    // Si falla la sincronización con Google Calendar, aun así eliminar el medicamento
                                     // La sincronización con Google Calendar no es crítica para la eliminación
                                     Logger.w("BotiquinActivity", 
                                         "Error al eliminar eventos de Google Calendar, continuando con eliminación del medicamento", 
@@ -677,7 +674,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                             }
                         );
                 })
-                .setNegativeButton("Cancelar", null)
+                .setNegativeButton(getString(R.string.btn_cancel), null)
                 .show();
     }
     
@@ -700,11 +697,11 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
 
                 @Override
                 public void onError(Exception exception) {
-                    String errorMessage = (exception != null && exception.getMessage() != null) 
-                        ? exception.getMessage() 
-                        : "Error desconocido";
-                    Toast.makeText(BotiquinActivity.this, 
-                        "Error al eliminar medicamento: " + errorMessage, 
+                    String errorMessage = (exception != null && exception.getMessage() != null)
+                        ? exception.getMessage()
+                        : getString(R.string.error_unknown);
+                    Toast.makeText(BotiquinActivity.this,
+                        getString(R.string.msg_error_deleting_medicine, errorMessage),
                         Toast.LENGTH_LONG).show();
                     Logger.e("BotiquinActivity", "Error al eliminar medicamento de Firestore", exception);
                 }
@@ -719,22 +716,22 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
         }
 
         if (medicamento.getTomasDiarias() != 0) {
-            Toast.makeText(this, "Esta acción solo está disponible para medicamentos ocasionales", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.msg_action_occasional_only), Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (medicamento.getStockActual() <= 0) {
-            Toast.makeText(this, "No hay stock disponible para registrar la toma", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.msg_no_stock_to_register_take), Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (!NetworkUtils.isNetworkAvailable(this)) {
-            Toast.makeText(this, "No hay conexión a internet", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.msg_no_internet), Toast.LENGTH_LONG).show();
             return;
         }
 
         if (medicamento.getId() == null || medicamento.getId().isEmpty()) {
-            Toast.makeText(this, "Medicamento sin identificador válido", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.msg_medicine_invalid_id), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -766,11 +763,11 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
                         @Override
                         public void onSuccess(Object updateResult) {
                             Toast.makeText(BotiquinActivity.this,
-                                    "Toma registrada. Stock actualizado.",
+                                    getString(R.string.msg_take_registered_stock),
                                     Toast.LENGTH_SHORT).show();
                             if (tratamientoCompletado) {
                                 Toast.makeText(BotiquinActivity.this,
-                                        "Tratamiento de " + medicamento.getNombre() + " completado.",
+                                        getString(R.string.msg_treatment_completed_short, medicamento.getNombre()),
                                         Toast.LENGTH_LONG).show();
                             }
                             cargarMedicamentos();
@@ -791,7 +788,7 @@ public class BotiquinActivity extends AppCompatActivity implements BotiquinAdapt
             public void onError(Exception exception) {
                 revertirCambiosMedicamento(medicamento, stockAnterior, diasRestantesAnteriores, estabaPausado);
                 Toast.makeText(BotiquinActivity.this,
-                        "Error al registrar la toma",
+                        getString(R.string.msg_error_registering_take),
                         Toast.LENGTH_LONG).show();
             }
         });

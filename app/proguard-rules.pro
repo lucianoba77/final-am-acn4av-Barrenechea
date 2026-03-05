@@ -19,3 +19,20 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep BuildConfig (WEB_CLIENT_ID)
+-keep class com.controlmedicamentos.myapplication.BuildConfig { *; }
+
+# Firebase
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+
+# Modelos usados con Firestore / reflexión
+-keep class com.controlmedicamentos.myapplication.models.** { *; }
+
+# MPAndroidChart
+-keep class com.github.mikephil.charting.** { *; }

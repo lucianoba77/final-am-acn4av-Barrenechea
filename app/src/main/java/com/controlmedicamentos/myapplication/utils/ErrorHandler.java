@@ -3,6 +3,7 @@ package com.controlmedicamentos.myapplication.utils;
 import android.content.Context;
 import android.util.Log;
 import android.widget.Toast;
+import com.controlmedicamentos.myapplication.R;
 import com.google.firebase.FirebaseException;
 import com.google.firebase.FirebaseNetworkException;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -17,7 +18,7 @@ public class ErrorHandler {
 
     /**
      * Maneja un error y muestra un mensaje apropiado al usuario.
-     * 
+     *
      * @param context Contexto de la aplicación
      * @param error Excepción que se produjo
      * @param tag Tag para logging (usualmente el nombre de la clase)
@@ -28,17 +29,9 @@ public class ErrorHandler {
             return;
         }
 
-        // Log del error para debugging
         Log.e(tag != null ? tag : TAG, "Error: ", error);
-
-        // Obtener mensaje amigable para el usuario
-        String mensaje = getErrorMessage(error);
-
-        // Mostrar Toast al usuario
+        String mensaje = getErrorMessage(context, error);
         Toast.makeText(context, mensaje, Toast.LENGTH_LONG).show();
-
-        // Opcional: Reportar a Crashlytics en producción
-        // FirebaseCrashlytics.getInstance().recordException(error);
     }
 
     /**
@@ -56,8 +49,81 @@ public class ErrorHandler {
     }
 
     /**
-     * Obtiene un mensaje de error amigable para el usuario basado en el tipo de excepción.
-     * Expuesto como público para permitir tests unitarios del mapeo de excepciones a mensajes.
+     * Obtiene un mensaje de error amigable desde recursos (strings.xml).
+     * Usar este método cuando se disponga de Context.
+     *
+     * @param context Contexto para acceder a recursos
+     * @param error Excepción que se produjo
+     * @return Mensaje de error amigable
+     */
+    public static String getErrorMessage(Context context, Exception error) {
+        if (context == null) {
+            return getErrorMessage(error);
+        }
+        if (error == null) {
+            return context.getString(R.string.error_unknown);
+        }
+
+        if (error instanceof FirebaseNetworkException
+                || error instanceof java.net.UnknownHostException
+                || error instanceof java.net.SocketTimeoutException) {
+            return context.getString(R.string.error_network);
+        }
+
+        if (error instanceof FirebaseAuthException) {
+            FirebaseAuthException authException = (FirebaseAuthException) error;
+            String errorCode = authException.getErrorCode();
+            switch (errorCode) {
+                case "ERROR_INVALID_EMAIL":
+                    return context.getString(R.string.error_auth_invalid_email);
+                case "ERROR_WRONG_PASSWORD":
+                    return context.getString(R.string.error_auth_wrong_password);
+                case "ERROR_USER_NOT_FOUND":
+                    return context.getString(R.string.error_auth_user_not_found);
+                case "ERROR_EMAIL_ALREADY_IN_USE":
+                    return context.getString(R.string.error_auth_email_in_use);
+                case "ERROR_WEAK_PASSWORD":
+                    return context.getString(R.string.error_auth_weak_password);
+                case "ERROR_NETWORK_REQUEST_FAILED":
+                    return context.getString(R.string.error_network_short);
+                default:
+                    return context.getString(R.string.error_auth_generic,
+                            error.getMessage() != null ? error.getMessage() : "");
+            }
+        }
+
+        if (error instanceof FirebaseFirestoreException) {
+            FirebaseFirestoreException firestoreException = (FirebaseFirestoreException) error;
+            switch (firestoreException.getCode()) {
+                case PERMISSION_DENIED:
+                    return context.getString(R.string.error_firestore_permission_denied);
+                case UNAVAILABLE:
+                    return context.getString(R.string.error_firestore_unavailable);
+                case DEADLINE_EXCEEDED:
+                    return context.getString(R.string.error_firestore_deadline);
+                default:
+                    return context.getString(R.string.error_firestore_default);
+            }
+        }
+
+        if (error instanceof FirebaseException) {
+            return context.getString(R.string.error_firebase_generic);
+        }
+
+        String errorMessage = error.getMessage();
+        if (errorMessage != null && !errorMessage.isEmpty()) {
+            if (errorMessage.contains("Exception") || errorMessage.contains("Error")) {
+                return context.getString(R.string.error_generic);
+            }
+            return errorMessage;
+        }
+
+        return context.getString(R.string.error_unexpected);
+    }
+
+    /**
+     * Obtiene un mensaje de error amigable sin Context (usa literales).
+     * Mantenido para tests unitarios que no inyectan Context. Preferir getErrorMessage(Context, Exception).
      *
      * @param error Excepción que se produjo
      * @return Mensaje de error amigable
@@ -66,19 +132,14 @@ public class ErrorHandler {
         if (error == null) {
             return "Ocurrió un error desconocido. Intenta nuevamente.";
         }
-
-        // Errores de red
-        if (error instanceof FirebaseNetworkException || 
-            error instanceof java.net.UnknownHostException ||
-            error instanceof java.net.SocketTimeoutException) {
+        if (error instanceof FirebaseNetworkException
+                || error instanceof java.net.UnknownHostException
+                || error instanceof java.net.SocketTimeoutException) {
             return "Error de conexión. Verifica tu conexión a internet e intenta nuevamente.";
         }
-
-        // Errores de Firebase Auth
         if (error instanceof FirebaseAuthException) {
             FirebaseAuthException authException = (FirebaseAuthException) error;
             String errorCode = authException.getErrorCode();
-            
             switch (errorCode) {
                 case "ERROR_INVALID_EMAIL":
                     return "El correo electrónico no es válido.";
@@ -93,14 +154,11 @@ public class ErrorHandler {
                 case "ERROR_NETWORK_REQUEST_FAILED":
                     return "Error de conexión. Verifica tu internet.";
                 default:
-                    return "Error de autenticación: " + error.getMessage();
+                    return "Error de autenticación: " + (error.getMessage() != null ? error.getMessage() : "");
             }
         }
-
-        // Errores de Firestore
         if (error instanceof FirebaseFirestoreException) {
             FirebaseFirestoreException firestoreException = (FirebaseFirestoreException) error;
-            
             switch (firestoreException.getCode()) {
                 case PERMISSION_DENIED:
                     return "No tienes permisos para realizar esta acción.";
@@ -112,22 +170,16 @@ public class ErrorHandler {
                     return "Error al conectar con el servidor. Intenta nuevamente.";
             }
         }
-
-        // Errores de Firebase genéricos
         if (error instanceof FirebaseException) {
             return "Error al conectar con el servidor. Verifica tu conexión.";
         }
-
-        // Error genérico
         String errorMessage = error.getMessage();
         if (errorMessage != null && !errorMessage.isEmpty()) {
-            // Si el mensaje es muy técnico, usar mensaje genérico
             if (errorMessage.contains("Exception") || errorMessage.contains("Error")) {
                 return "Ocurrió un error. Intenta nuevamente.";
             }
             return errorMessage;
         }
-
         return "Ocurrió un error inesperado. Intenta nuevamente.";
     }
 

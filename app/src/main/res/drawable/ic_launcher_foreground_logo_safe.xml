@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo con margen para zona segura del icono adaptativo (66dp central en 108dp).
+     Así el logo no se recorta en launcher con forma circular o redondeada. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="21dp"
+    android:insetTop="21dp"
+    android:insetRight="21dp"
+    android:insetBottom="21dp"
+    android:drawable="@drawable/mimedicina_logo" />

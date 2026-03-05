@@ -1,15 +1,14 @@
 package com.controlmedicamentos.myapplication.utils;
 
 import android.util.Log;
+import com.controlmedicamentos.myapplication.BuildConfig;
 
 /**
  * Clase de logging que solo muestra logs de debug en modo desarrollo.
- * En producción, solo se muestran errores y warnings.
+ * En release (BuildConfig.DEBUG == false) solo se muestran errores y warnings.
  */
 public class Logger {
-    // BuildConfig se genera en tiempo de compilación, usar true para desarrollo
-    // En producción, cambiar a false o usar BuildConfig.DEBUG si está disponible
-    private static final boolean DEBUG = true; // Cambiar a false en producción o usar BuildConfig.DEBUG
+    private static final boolean DEBUG = BuildConfig.DEBUG;
 
     /**
      * Log de debug. Solo se muestra en modo desarrollo.

@@ -34,6 +34,7 @@
     <dimen name="medicine_item_height">80dp</dimen>
     <dimen name="medicine_icon_size">48dp</dimen>
     <dimen name="progress_bar_height">8dp</dimen>
+    <dimen name="dashboard_horario_width">40dp</dimen>
 
     <!-- Navigation Dimensions -->
     <dimen name="nav_button_size">64dp</dimen>

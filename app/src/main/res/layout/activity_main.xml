@@ -34,6 +34,20 @@
 
     </LinearLayout>
 
+    <!-- Mensaje cuando no hay medicamentos para hoy -->
+    <TextView
+        android:id="@+id/tvEmptyDashboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/headerLayout"
+        android:layout_above="@+id/barraNavegacion"
+        android:padding="@dimen/padding_medium"
+        android:text="@string/main_empty_today"
+        android:textColor="@color/secondary_text"
+        android:textSize="@dimen/text_size_medium"
+        android:gravity="center"
+        android:visibility="gone" />
+
     <!-- Lista de medicamentos -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvMedicamentos"

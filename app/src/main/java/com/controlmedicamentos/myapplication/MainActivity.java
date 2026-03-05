@@ -8,7 +8,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.google.android.material.button.MaterialButton;
 import com.controlmedicamentos.myapplication.adapters.MedicamentoAdapter;
 import com.controlmedicamentos.myapplication.models.Medicamento;
 import com.controlmedicamentos.myapplication.models.TomaProgramada;
@@ -32,7 +31,8 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
 
     private static final String TAG = "MainActivity";
     private RecyclerView rvMedicamentos;
-    private MaterialButton btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
+    private View tvEmptyDashboard;
+    private View btnNavHome, btnNavNuevaMedicina, btnNavBotiquin, btnNavHistorial, btnNavAjustes;
     private ProgressBar progressBar;
     private MedicamentoAdapter adapter;
     private List<Medicamento> medicamentos;
@@ -83,25 +83,25 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
 
             Logger.d(TAG, "Usuario autenticado, continuando con inicialización");
 
-        // Inicializar vistas
-        inicializarVistas();
+            // Inicializar vistas
+            inicializarVistas();
 
-        // Configurar RecyclerView
-        configurarRecyclerView();
+            // Configurar RecyclerView
+            configurarRecyclerView();
 
             // Cargar datos desde Firebase
             cargarDatosDesdeFirebase();
 
-        // Configurar navegación
-        configurarNavegacion();
-        
-        // Iniciar servicio de verificación de estados de tomas
-        iniciarServicioVerificacionTomas();
-            
+            // Configurar navegación
+            configurarNavegacion();
+
+            // Iniciar servicio de verificación de estados de tomas
+            iniciarServicioVerificacionTomas();
+
             Logger.d(TAG, "MainActivity inicializada correctamente");
         } catch (Exception e) {
             Logger.e(TAG, "Error crítico en onCreate", e);
-            Toast.makeText(this, "Error al iniciar la aplicación", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.msg_error_starting_app), Toast.LENGTH_LONG).show();
             try {
                 irALogin();
             } catch (Exception ex) {
@@ -128,7 +128,8 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
 
     private void inicializarVistas() {
         try {
-        rvMedicamentos = findViewById(R.id.rvMedicamentos);
+            rvMedicamentos = findViewById(R.id.rvMedicamentos);
+            tvEmptyDashboard = findViewById(R.id.tvEmptyDashboard);
             btnNavHome = findViewById(R.id.btnNavHome);
             btnNavNuevaMedicina = findViewById(R.id.btnNavNuevaMedicina);
             btnNavBotiquin = findViewById(R.id.btnNavBotiquin);
@@ -155,9 +156,18 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
     private void configurarRecyclerView() {
         medicamentos = new ArrayList<>();
         adapter = new MedicamentoAdapter(this, medicamentos);
+        adapter.setTomaTrackingService(tomaTrackingService);
         adapter.setOnMedicamentoClickListener(this);
         rvMedicamentos.setLayoutManager(new LinearLayoutManager(this));
         rvMedicamentos.setAdapter(adapter);
+    }
+
+    private void actualizarVisibilidadListaVacia() {
+        if (tvEmptyDashboard != null && rvMedicamentos != null) {
+            boolean vacia = medicamentos == null || medicamentos.isEmpty();
+            tvEmptyDashboard.setVisibility(vacia ? View.VISIBLE : View.GONE);
+            rvMedicamentos.setVisibility(vacia ? View.GONE : View.VISIBLE);
+        }
     }
 
     private void cargarDatosDesdeFirebase() {
@@ -168,6 +178,7 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
                     if (adapter != null && !dataManager.isListenerYaActualizo()) {
                         medicamentos = dataManager.ordenarPorHorario(medicamentosParaDashboard);
                         adapter.actualizarMedicamentos(medicamentos);
+                        actualizarVisibilidadListaVacia();
                         Logger.d(TAG, "Carga inicial: dashboard actualizado con " + medicamentos.size() + " medicamentos");
                     } else if (dataManager.isListenerYaActualizo()) {
                         Logger.d(TAG, "Carga inicial: omitida porque el listener ya actualizó los datos");
@@ -188,25 +199,23 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
 
         // Configurar listener para actualizaciones en tiempo real
         medicamentosListener = dataManager.configurarListenerTiempoReal(new MedicamentoDataManager.DataCallback() {
-                    @Override
+            @Override
             public void onDataLoaded(List<Medicamento> medicamentosParaDashboard, List<Medicamento> todosLosMedicamentos) {
                 try {
                     medicamentos = dataManager.ordenarPorHorario(medicamentosParaDashboard);
-                            
-                            if (adapter != null) {
-        adapter.actualizarMedicamentos(medicamentos);
+                    if (adapter != null) {
+                        adapter.actualizarMedicamentos(medicamentos);
+                        actualizarVisibilidadListaVacia();
                         Logger.d(TAG, "Listener: dashboard actualizado con " + medicamentos.size() + " medicamentos");
                     }
-                    
-                    // Verificar alertas de stock
                     stockAlertManager.verificarAlertasStock(todosLosMedicamentos);
-                        } catch (Exception e) {
+                } catch (Exception e) {
                     Logger.e(TAG, "Error en callback del listener", e);
-                        }
-                    }
+                }
+            }
 
-                    @Override
-                    public void onError(Exception exception) {
+            @Override
+            public void onError(Exception exception) {
                 Logger.w(TAG, "Error en listener de tiempo real", exception);
             }
         });
@@ -231,29 +240,30 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
                         if (completoTodasLasTomas) {
                             medicamentos.remove(medicamento);
                             adapter.actualizarMedicamentos(medicamentos);
+                            actualizarVisibilidadListaVacia();
                             Toast.makeText(MainActivity.this,
-                                    "✓ " + medicamento.getNombre() + " marcado como tomado. Completaste todas las tomas del día.",
+                                    getString(R.string.msg_all_takes_completed, medicamento.getNombre()),
                                     Toast.LENGTH_LONG).show();
                         } else {
                             medicamentos = dataManager.ordenarPorHorario(medicamentos);
                             adapter.actualizarMedicamentos(medicamentos);
                             Toast.makeText(MainActivity.this,
-                                    "✓ " + medicamento.getNombre() + " marcado como tomado",
+                                    getString(R.string.msg_taken_short, medicamento.getNombre()),
                                     Toast.LENGTH_SHORT).show();
                         }
                         
                         if (tratamientoCompletado) {
                             Toast.makeText(MainActivity.this,
-                                    "¡Tratamiento de " + medicamento.getNombre() + " completado!",
+                                    getString(R.string.msg_treatment_completed, medicamento.getNombre()),
                                     Toast.LENGTH_LONG).show();
                         }
                     }
 
                     @Override
                     public void onError(Exception exception) {
-                String errorMessage = (exception != null && exception.getMessage() != null) 
-                    ? exception.getMessage() 
-                    : "Error al registrar la toma";
+                String errorMessage = (exception != null && exception.getMessage() != null)
+                    ? exception.getMessage()
+                    : getString(R.string.msg_error_registering_take);
                 ErrorHandler.handleErrorWithCustomMessage(MainActivity.this, exception, TAG, errorMessage);
             }
         });
@@ -261,14 +271,8 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
 
     @Override
     public void onMedicamentoClick(Medicamento medicamento) {
-        if (!ValidationUtils.isValidMedicamento(medicamento)) {
-            ErrorHandler.handleErrorWithCustomMessage(this, null, TAG, 
-                "Error al abrir detalles del medicamento");
-            return;
-        }
-        
-        Intent intent = DetallesMedicamentoActivity.createIntent(this, medicamento.getId());
-        startActivity(intent);
+        // No se muestra pantalla de detalles del medicamento desde el dashboard (según preferencia de UX).
+        // El usuario puede editar o ver detalles desde el Botiquín.
     }
     
     @Override
@@ -277,10 +281,15 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
             return;
         }
         
-        String horarioToma = obtenerHorarioTomaEnAlerta(medicamento);
+        TomaProgramada tomaPosponible = tomaTrackingService != null
+                ? tomaTrackingService.obtenerTomaPosponible(medicamento.getId())
+                : null;
+        String horarioToma = (tomaPosponible != null && tomaPosponible.getHorario() != null)
+                ? tomaPosponible.getHorario()
+                : null;
         if (horarioToma == null) {
-            ErrorHandler.handleErrorWithCustomMessage(this, null, TAG, 
-                "No hay tomas pendientes para posponer");
+            ErrorHandler.handleErrorWithCustomMessage(this, null, TAG,
+                "No hay tomas en ventana para posponer (30 min antes hasta 1 h después)");
             return;
         }
         
@@ -288,8 +297,6 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         boolean pospuesta = tomaActionHandler.posponerToma(medicamento, horarioToma);
         
         // Actualizar la UI independientemente del resultado para reflejar cualquier cambio
-        // Si la posposición fue exitosa, el horario cambió y necesita reordenarse
-        // Si falló (máximo alcanzado), la toma puede haberse marcado como omitida
         medicamentos = dataManager.ordenarPorHorario(medicamentos);
         adapter.actualizarMedicamentos(medicamentos);
     }
@@ -303,6 +310,11 @@ public class MainActivity extends AppCompatActivity implements MedicamentoAdapte
         if (tomaTrackingService == null) {
             Logger.w(TAG, "obtenerHorarioTomaEnAlerta: tomaTrackingService es null");
             return null;
+        }
+        
+        TomaProgramada tomaPosponible = tomaTrackingService.obtenerTomaPosponible(medicamento.getId());
+        if (tomaPosponible != null && tomaPosponible.getHorario() != null) {
+            return tomaPosponible.getHorario();
         }
         
         List<TomaProgramada> tomas = tomaTrackingService.obtenerTomasMedicamento(medicamento.getId());

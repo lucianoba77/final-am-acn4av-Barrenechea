@@ -6,6 +6,9 @@ import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.google.firebase.auth.FirebaseAuth;
+
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -18,9 +21,21 @@ import static org.junit.Assert.assertEquals;
 /**
  * Tests instrumentados para LoginActivity.
  * Verifica que la pantalla de login muestre los elementos principales.
+ * Se hace signOut antes de cada test para que LoginActivity no redirija a MainActivity
+ * cuando hay sesión persistida en el emulador.
  */
 @RunWith(AndroidJUnit4.class)
 public class LoginActivityTest {
+
+    @Before
+    public void signOutFirebase() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            if (auth.getCurrentUser() != null) {
+                auth.signOut();
+            }
+        });
+    }
 
     @Test
     public void useAppContext() {

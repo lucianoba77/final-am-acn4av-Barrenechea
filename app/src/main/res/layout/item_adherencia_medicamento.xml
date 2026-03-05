@@ -74,7 +74,7 @@
             android:id="@+id/tvTotalTomas"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="@dimen/text_size_medium"
+            android:textSize="@dimen/text_size_large"
             android:textColor="@color/secondary_text"
             android:layout_marginTop="@dimen/margin_small" />
 
@@ -83,7 +83,7 @@
             android:id="@+id/tvMensualSemanal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="@dimen/text_size_small"
+            android:textSize="@dimen/text_size_medium"
             android:textColor="@color/secondary_text"
             android:layout_marginTop="@dimen/margin_tiny" />
 
@@ -92,7 +92,7 @@
             android:id="@+id/tvMensajeEstado"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="@dimen/text_size_medium"
+            android:textSize="@dimen/text_size_large"
             android:textStyle="italic"
             android:layout_marginTop="@dimen/margin_small" />
     </LinearLayout>

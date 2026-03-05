@@ -9,82 +9,198 @@
     android:background="@color/surface"
     android:elevation="8dp">
 
-    <!-- Botón Home -->
-    <com.google.android.material.button.MaterialButton
+    <!-- Inicio: círculo + ícono + etiqueta (estilo web) -->
+    <LinearLayout
         android:id="@+id/btnNavHome"
         android:layout_width="0dp"
-        android:layout_height="@dimen/button_height_large"
+        android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginEnd="@dimen/margin_small"
-        android:text="@string/nav_home"
-        android:textSize="@dimen/text_size_small"
-        android:textColor="@color/nav_active"
-        android:backgroundTint="@android:color/transparent"
-        android:drawableTop="@drawable/ic_home"
-        android:drawablePadding="@dimen/padding_small"
-        style="@style/NavigationButton" />
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="@dimen/padding_small"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginEnd="@dimen/margin_small">
 
-    <!-- Botón Nueva Medicina -->
-    <com.google.android.material.button.MaterialButton
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_nav_circle_home"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_home"
+                app:tint="@color/nav_home"
+                android:contentDescription="@string/nav_home" />
+        </FrameLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nav_home"
+            android:textSize="@dimen/text_size_small"
+            android:textColor="@color/nav_active"
+            android:layout_marginTop="@dimen/margin_tiny"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Nueva Medicina -->
+    <LinearLayout
         android:id="@+id/btnNavNuevaMedicina"
         android:layout_width="0dp"
-        android:layout_height="@dimen/button_height_large"
+        android:layout_height="wrap_content"
         android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="@dimen/padding_small"
+        android:clickable="true"
+        android:focusable="true"
         android:layout_marginStart="@dimen/margin_small"
-        android:layout_marginEnd="@dimen/margin_small"
-        android:text="@string/nav_new_medicine"
-        android:textSize="@dimen/text_size_small"
-        android:textColor="@color/nav_add"
-        android:backgroundTint="@android:color/transparent"
-        android:drawableTop="@drawable/ic_add"
-        android:drawablePadding="@dimen/padding_small"
-        style="@style/NavigationButton" />
+        android:layout_marginEnd="@dimen/margin_small">
 
-    <!-- Botón Botiquín -->
-    <com.google.android.material.button.MaterialButton
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_nav_circle_add"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_add"
+                app:tint="@color/nav_add"
+                android:contentDescription="@string/nav_new_medicine" />
+        </FrameLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nav_new_medicine"
+            android:textSize="@dimen/text_size_small"
+            android:textColor="@color/nav_add"
+            android:layout_marginTop="@dimen/margin_tiny"
+            android:maxLines="2"
+            android:gravity="center"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Botiquín -->
+    <LinearLayout
         android:id="@+id/btnNavBotiquin"
         android:layout_width="0dp"
-        android:layout_height="@dimen/button_height_large"
+        android:layout_height="wrap_content"
         android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="@dimen/padding_small"
+        android:clickable="true"
+        android:focusable="true"
         android:layout_marginStart="@dimen/margin_small"
-        android:layout_marginEnd="@dimen/margin_small"
-        android:text="@string/nav_medicine_cabinet"
-        android:textSize="@dimen/text_size_small"
-        android:textColor="@color/nav_cabinet"
-        android:backgroundTint="@android:color/transparent"
-        android:drawableTop="@drawable/ic_first_aid_kit"
-        android:drawablePadding="@dimen/padding_small"
-        style="@style/NavigationButton" />
+        android:layout_marginEnd="@dimen/margin_small">
 
-    <!-- Botón Historial -->
-    <com.google.android.material.button.MaterialButton
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_nav_circle_cabinet"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_first_aid_kit"
+                app:tint="@color/nav_cabinet"
+                android:contentDescription="@string/nav_medicine_cabinet" />
+        </FrameLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nav_medicine_cabinet"
+            android:textSize="@dimen/text_size_small"
+            android:textColor="@color/nav_cabinet"
+            android:layout_marginTop="@dimen/margin_tiny"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Adhesión / Historial -->
+    <LinearLayout
         android:id="@+id/btnNavHistorial"
         android:layout_width="0dp"
-        android:layout_height="@dimen/button_height_large"
+        android:layout_height="wrap_content"
         android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="@dimen/padding_small"
+        android:clickable="true"
+        android:focusable="true"
         android:layout_marginStart="@dimen/margin_small"
-        android:layout_marginEnd="@dimen/margin_small"
-        android:text="@string/nav_history"
-        android:textSize="@dimen/text_size_small"
-        android:textColor="@color/nav_history"
-        android:backgroundTint="@android:color/transparent"
-        android:drawableTop="@drawable/ic_history"
-        android:drawablePadding="@dimen/padding_small"
-        style="@style/NavigationButton" />
+        android:layout_marginEnd="@dimen/margin_small">
 
-    <!-- Botón Ajustes/Configuración -->
-    <com.google.android.material.button.MaterialButton
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_nav_circle_history"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_history"
+                app:tint="@color/nav_history"
+                android:contentDescription="@string/nav_history" />
+        </FrameLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nav_history"
+            android:textSize="@dimen/text_size_small"
+            android:textColor="@color/nav_history"
+            android:layout_marginTop="@dimen/margin_tiny"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Ajustes -->
+    <LinearLayout
         android:id="@+id/btnNavAjustes"
         android:layout_width="0dp"
-        android:layout_height="@dimen/button_height_large"
+        android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="@dimen/margin_small"
-        android:text="@string/nav_settings"
-        android:textSize="@dimen/text_size_small"
-        android:textColor="@color/nav_settings"
-        android:backgroundTint="@android:color/transparent"
-        android:drawableTop="@drawable/ic_settings"
-        android:drawablePadding="@dimen/padding_small"
-        style="@style/NavigationButton" />
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="@dimen/padding_small"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginStart="@dimen/margin_small">
+
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_nav_circle_settings"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/nav_settings"
+                android:contentDescription="@string/nav_settings" />
+        </FrameLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nav_settings"
+            android:textSize="@dimen/text_size_small"
+            android:textColor="@color/nav_settings"
+            android:layout_marginTop="@dimen/margin_tiny"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
 
 </LinearLayout>
