@@ -77,6 +77,14 @@ public class TomaTrackingService {
         
         List<String> horarios = medicamento.getHorariosTomasHoy();
         if (horarios == null || horarios.isEmpty()) {
+            // Medicamentos ocasionales (tomasDiarias <= 0) no tienen horarios de toma; es esperado
+            if (medicamento.getTomasDiarias() <= 0) {
+                Log.d(TAG, "inicializarTomasDia: medicamento ocasional " + medicamentoId + ", sin horarios de toma (esperado)");
+                tomasPorMedicamento.remove(medicamentoId);
+                ultimaInicializacionPorMedicamento.remove(medicamentoId);
+                guardarTomasProgramadas();
+                return;
+            }
             Log.w(TAG, "inicializarTomasDia: horarios vacíos para medicamento " + medicamentoId + 
                   ", tomasDiarias=" + medicamento.getTomasDiarias() + 
                   ", horarioPrimeraToma=" + medicamento.getHorarioPrimeraToma());

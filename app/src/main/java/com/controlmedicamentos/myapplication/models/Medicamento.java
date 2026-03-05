@@ -186,6 +186,43 @@ public class Medicamento {
         }
     }
 
+    /**
+     * Genera la lista de horarios por defecto a partir de horarioPrimeraToma y tomasDiarias.
+     * No modifica horariosTomas. Útil cuando el medicamento viene de Firestore con lista vacía
+     * pero sí tiene hora primera toma y tomas diarias (ej. valor por defecto de la app).
+     */
+    private List<String> obtenerHorariosPorDefecto() {
+        if (tomasDiarias <= 0) {
+            return new ArrayList<>();
+        }
+        String horaStr = horarioPrimeraToma;
+        if (horaStr == null || horaStr.isEmpty()) {
+            horaStr = "00:00";
+        }
+        int intervaloHoras = 24 / tomasDiarias;
+        List<String> out = new ArrayList<>();
+        try {
+            String[] partes = horaStr.split(":");
+            if (partes.length < 2) {
+                partes = new String[]{"00", "00"};
+            }
+            int horaInicial = Integer.parseInt(partes[0]);
+            int minutoInicial = Integer.parseInt(partes[1]);
+            for (int i = 0; i < tomasDiarias; i++) {
+                int hora = (horaInicial + (i * intervaloHoras)) % 24;
+                out.add(String.format("%02d:%02d", hora, minutoInicial));
+            }
+        } catch (Exception e) {
+            int horaInicial = 0;
+            int minutoInicial = 0;
+            for (int i = 0; i < tomasDiarias; i++) {
+                int hora = (horaInicial + (i * intervaloHoras)) % 24;
+                out.add(String.format("%02d:%02d", hora, minutoInicial));
+            }
+        }
+        return out;
+    }
+
     // Getters y Setters
     public String getId() {
         return id;
@@ -329,6 +366,12 @@ public class Medicamento {
             int diaIndex = getDiaSemanaIndex0a6();
             List<String> horarios = programacionPersonalizada.get(diaIndex);
             if (horarios == null || horarios.isEmpty()) {
+                // Sin horarios guardados para este día: usar horario por defecto (primera toma + tomas diarias)
+                if (tomasDiarias > 0 && horarioPrimeraToma != null && !horarioPrimeraToma.isEmpty()) {
+                    List<String> porDefecto = obtenerHorariosPorDefecto();
+                    Collections.sort(porDefecto, String::compareTo);
+                    return porDefecto;
+                }
                 return new ArrayList<>();
             }
             List<String> copia = new ArrayList<>(horarios);
@@ -336,6 +379,14 @@ public class Medicamento {
             return copia;
         }
         if (horariosTomas == null || horariosTomas.isEmpty()) {
+            // Lista vacía al cargar (ej. desde Firestore): derivar de hora primera toma y tomas diarias
+            if (tomasDiarias > 0 && horarioPrimeraToma != null && !horarioPrimeraToma.isEmpty()) {
+                if (horariosTomas == null) {
+                    horariosTomas = new ArrayList<>();
+                }
+                generarHorariosTomas();
+                return new ArrayList<>(horariosTomas);
+            }
             return new ArrayList<>();
         }
         return horariosTomas;
@@ -368,6 +419,11 @@ public class Medicamento {
         if (usarProgramacionPersonalizada && programacionPersonalizada != null && !programacionPersonalizada.isEmpty()) {
             List<String> horarios = programacionPersonalizada.get(diaSemana0a6);
             if (horarios == null || horarios.isEmpty()) {
+                if (tomasDiarias > 0 && horarioPrimeraToma != null && !horarioPrimeraToma.isEmpty()) {
+                    List<String> porDefecto = obtenerHorariosPorDefecto();
+                    Collections.sort(porDefecto, String::compareTo);
+                    return porDefecto;
+                }
                 return new ArrayList<>();
             }
             List<String> copia = new ArrayList<>(horarios);
@@ -375,6 +431,9 @@ public class Medicamento {
             return copia;
         }
         if (horariosTomas == null || horariosTomas.isEmpty()) {
+            if (tomasDiarias > 0 && horarioPrimeraToma != null && !horarioPrimeraToma.isEmpty()) {
+                return obtenerHorariosPorDefecto();
+            }
             return new ArrayList<>();
         }
         return new ArrayList<>(horariosTomas);
