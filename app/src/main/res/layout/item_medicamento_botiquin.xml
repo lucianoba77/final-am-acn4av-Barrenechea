@@ -80,6 +80,18 @@
                 android:textColor="#2C2C2C"
                 android:layout_marginBottom="@dimen/margin_small" />
 
+            <!-- Para qué sirve (afección) -->
+            <TextView
+                android:id="@+id/tvAfeccion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#2C2C2C"
+                android:layout_marginBottom="@dimen/margin_small"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:visibility="gone" />
+
             <!-- Stock -->
             <TextView
                 android:id="@+id/tvStock"

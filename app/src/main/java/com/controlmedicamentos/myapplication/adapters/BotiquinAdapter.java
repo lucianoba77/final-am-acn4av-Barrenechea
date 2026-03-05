@@ -93,6 +93,7 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
         private ImageView ivIcono;
         private TextView tvNombre;
         private TextView tvPresentacion;
+        private TextView tvAfeccion;
         private TextView tvStock;
         private TextView tvEstado;
         private TextView tvFechaVencimiento;
@@ -106,6 +107,7 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
             ivIcono = itemView.findViewById(R.id.ivIcono);
             tvNombre = itemView.findViewById(R.id.tvNombre);
             tvPresentacion = itemView.findViewById(R.id.tvPresentacion);
+            tvAfeccion = itemView.findViewById(R.id.tvAfeccion);
             tvStock = itemView.findViewById(R.id.tvStock);
             tvEstado = itemView.findViewById(R.id.tvEstado);
             tvFechaVencimiento = itemView.findViewById(R.id.tvFechaVencimiento);
@@ -123,6 +125,14 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
 
             // Configurar presentación
             tvPresentacion.setText(medicamento.getPresentacion());
+
+            // Configurar para qué sirve (afección)
+            if (medicamento.getAfeccion() != null && !medicamento.getAfeccion().trim().isEmpty()) {
+                tvAfeccion.setText(context.getString(R.string.condition_label, medicamento.getAfeccion().trim()));
+                tvAfeccion.setVisibility(TextView.VISIBLE);
+            } else {
+                tvAfeccion.setVisibility(TextView.GONE);
+            }
 
             // Configurar stock (mostrar siempre, incluso si es 0)
             if (!medicamento.estaVencido()) {
@@ -219,6 +229,9 @@ public class BotiquinAdapter extends RecyclerView.Adapter<BotiquinAdapter.Botiqu
             // Aplicar colores mejorados a los TextViews
             tvNombre.setTextColor(textColorDark);
             tvPresentacion.setTextColor(textColorMedium);
+            if (tvAfeccion.getVisibility() == View.VISIBLE) {
+                tvAfeccion.setTextColor(textColorMedium);
+            }
             tvStock.setTextColor(textColorMedium);
             tvFechaVencimiento.setTextColor(textColorMedium);
             
